@@ -23,40 +23,35 @@ An interactive web-based tool for creating, visualizing, and simulating system d
 
 2. Open `index.html` in your web browser - no server required!
 
-### Online Deployment
-
-To deploy on a web server:
-
-1. Upload the following files to your web hosting provider:
-   - `index.html`
-   - `documentation.html`
-   - The entire `scripts/` directory
-   - The entire `styles/` directory
-
-2. Access the tool through your domain: `https://yourdomain.com/`
-
 ## Model Syntax Example
 
 ```
-title Simple Population Model
+# Minimal Population Model
+title Simple Population & Resources Model
 
 # Stocks
 stock Population = 1000
+stock Resources = 5000
 
 # Parameters
 param BirthRate = 0.05
-param DeathRate = 0.03
+param ResourceConsumptionRate = 1.2
 
 # Flows
-flow Births = Population * BirthRate
-flow Deaths = Population * DeathRate
+flow Births = Population * BirthRate * (Resources / 5000)
+flow Deaths = Population * (1 - Resources / 10000)
+flow ResourceDepletion = Population * ResourceConsumptionRate
 
 # Connections
 connect Births -> Population
 connect Deaths <- Population
+connect ResourceDepletion <- Resources
 
 # Simulation settings
-sim 0 100 1
+sim 0 40 0.5
+
+# A/B test different consumption rates
+abtest param ResourceConsumptionRate = [1.2, 0.8]
 ```
 
 ## Documentation
