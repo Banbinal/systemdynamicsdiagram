@@ -68,7 +68,7 @@ See the [full documentation](documentation.html) for detailed information on the
 
 ## License
 
-MIT
+[MIT](https://github.com/Banbinal/systemdiagram/blob/master/LICENSE)
 
 ## Credits
 
