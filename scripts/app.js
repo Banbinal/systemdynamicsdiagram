@@ -1,17 +1,17 @@
 /**
- * Main Application Module for System Dynamics Tool
+ * Main Application Module for System Dynamics Tool v1.2
  * Integrates all modules and manages UI interactions
  */
 
 import { parseDSL } from './parser.js';
 import { generateMermaidSyntax, renderMermaid } from './visualization.js';
-import { runSimulation } from './simulation.js';
-import { plotResults, plotABResults } from './plotting.js';
+import { runSimulationv1_2, prepareVariations, runVariations } from './simulation.js';
+import { plotResults, plotABResults, plotSweepResults } from './plotting.js';
 import { 
-    interpretSimulationResults, 
-    findFeedbackLoops, 
+    analyzeSimulationResults, 
     displayInterpretation,
-    displayABInterpretation
+    findFeedbackLoops, 
+    explainLoop
 } from './analysis.js';
 import {
     displayMessage,
@@ -26,6 +26,7 @@ import {
     generatePDF,
     saveHTML
 } from './reporting.js';
+import { config } from './config.js';
 
 // --- Global Variables & Constants ---
 const DEBOUNCE_DELAY = 500;
@@ -35,10 +36,14 @@ let lastValidModel = null;
 let lastResults = null;
 let lastAnalysis = null;
 let lastLoops = null;
+let lastSuccessfulModel = null;
 let debounceTimer = null;
 let urlUpdateTimer = null;
 let lastABResults = null;
 let editor = null; // CodeMirror editor instance
+let dslVersion = 'v1.2'; // Default to new version
+let lastChartImages = null; 
+const scenarioSelector = document.getElementById('scenarioSelector'); // Added for scenarios
 
 // Define CodeMirror mode for DSL syntax highlighting
 function defineDslMode() {
@@ -49,25 +54,26 @@ function defineDslMode() {
             // Comments
             {regex: /#.*/, token: "comment"},
             
-            // Keywords
-            {regex: /(?:stock|flow|aux|param|graph|title|time|dt|timestep|runs|to|from|connect|sim)\b/, 
-             token: "keyword"},
+            // Specific Keywords First with UNIQUE tokens!
+            {regex: /(?:plot|StartTime|EndTime|TimeStep)\b/, token: "keyword-plot"}, // Unique token for Purple
+            {regex: /(?:sweep|scenario|abtest)\b/, token: "keyword-sweep"}, // Unique token for Orange
+            {regex: /(?:limit)\b/, token: "keyword-limit"}, // Unique token for Limit Blue
             
-            // AB Test
-            {regex: /abtest\b/, token: "abtest"},
+            // Default Keywords (standard token)
+            {regex: /(?:title|stock|flow|calc|constant|param|map|group|module)\b/, token: "keyword"}, // Default Blue
             
-            // Numbers
+            // Other tokens
+            {regex: /(?:-->|-\+>)/, token: "polarity"},
             {regex: /\d+(?:\.\d+)?/, token: "number"},
-            
-            // Operators
-            {regex: /[+\-*\/=<>!&|^%]+/, token: "operator"},
-            
-            // Variable names
+            {regex: /[+\-*\/=<>&|^%]+/, token: "operator"},
+            {regex: /[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*/, token: "module-reference"},
+            {regex: /(?:smooth|delay3|step|pulse|time|map|max|min)\b(?=\s*\()/, token: "function"}, 
             {regex: /[A-Za-z_][A-Za-z0-9_]*/, token: "variable"},
-            
-            // Strings
             {regex: /"(?:[^\\]|\\.)*?(?:"|$)/, token: "string"},
             {regex: /'(?:[^\\]|\\.)*?(?:'|$)/, token: "string"},
+            {regex: /[\(\)]/, token: "bracket"},
+            {regex: /[\{\}]/, token: "bracket"},
+            {regex: /\(\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\)/, token: "map-point"},
         ],
         meta: {
             dontIndentStates: ["comment"],
@@ -99,6 +105,7 @@ const simTabPanel = document.getElementById('simulationTabPanel');
 const interpTabBtn = document.getElementById('interpTabBtn');
 const interpTabPanel = document.getElementById('interpretationTabPanel');
 const interpretationContent = document.getElementById('interpretationContent');
+const dslVersionSelector = document.getElementById('dslVersionSelector');
 
 // Report modal elements
 const reportModal = document.getElementById('reportModal');
@@ -126,6 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
     defineDslMode();
     setupEditor();
     
+    // Set up DSL version selector
+    setupDSLVersionSelector();
+    
     // Load model from URL hash if present
     loadModelFromUrl();
     
@@ -137,6 +147,18 @@ document.addEventListener('DOMContentLoaded', () => {
         updateVisualization();
     }, 100);
 });
+
+/**
+ * Sets up the DSL version selector
+ */
+function setupDSLVersionSelector() {
+    if (dslVersionSelector) {
+        dslVersionSelector.addEventListener('change', (e) => {
+            dslVersion = e.target.value;
+            updateVisualization();
+        });
+    }
+}
 
 /**
  * Check if Mermaid is properly initialized
@@ -221,220 +243,254 @@ function updateVisualization() {
     }
 
     const dslCode = editor.getValue();
-    const model = parseDSL(dslCode);
     
-    if (model && model.errors.length === 0) {
-        lastValidModel = model; // Store valid model
+    // Parse the model based on DSL version
+    let model;
+    model = parseDSL(dslCode);
+
+    // Populate scenario selector if scenarios exist
+    if (scenarioSelector) { // Check if the element exists first
+        // Clear previous options (except the default 'Base Model')
+        while (scenarioSelector.options.length > 1) {
+            scenarioSelector.remove(1);
+        }
         
-        // Display model title if available
+        if (model.scenarios && Object.keys(model.scenarios).length > 0) {
+            console.log("[DEBUG app] Scenarios found, populating selector:", Object.keys(model.scenarios));
+            scenarioSelector.disabled = false;
+            for (const scenarioName in model.scenarios) {
+                const option = document.createElement('option');
+                option.value = scenarioName;
+                option.textContent = scenarioName;
+                scenarioSelector.appendChild(option);
+            }
+        } else {
+            console.log("[DEBUG app] No scenarios found, disabling selector.");
+            scenarioSelector.disabled = true;
+            scenarioSelector.value = ""; // Reset to Base Model selection
+        }
+    }
+
+    // Always attempt to generate syntax, even if errors exist
+    if (model) { 
+        if (model.errors && model.errors.length > 0) {
+            // Show parsing errors in the message area
+            displayMessage(`DSL Parsing Errors (displaying potentially incomplete model):
+- ${model.errors.join('\n- ')}`, 'error', messageArea);
+        } else {
+             // Clear errors if parsing is now successful
+             if(messageArea.querySelector('.error-message')) messageArea.innerHTML = ''; 
+        }
+
+        // Store the model regardless of errors
+        lastValidModel = model; 
+
+        // Display model title if it exists in the parsed model
         const modelTitleElement = document.getElementById('modelTitle');
         if (modelTitleElement) {
             if (model.title) {
                 modelTitleElement.textContent = model.title;
                 modelTitleElement.classList.remove('hidden');
             } else {
+                // Hide if no title found in this parse
                 modelTitleElement.classList.add('hidden');
             }
         }
         
-        currentMermaidSyntax = generateMermaidSyntax(model);
+        // Generate syntax - generateMermaidSyntax should handle potential inconsistencies
+        currentMermaidSyntax = generateMermaidSyntax(model); 
+        
         // Only render if the model tab is active
         if (modelTabPanel.getAttribute('data-active') === 'true') {
             renderMermaid(currentMermaidSyntax, mermaidDiagramContainer);
         }
-    } else if (model && model.errors.length > 0) {
-        // Show parsing errors
-        displayMessage(`DSL Parsing Errors:\n- ${model.errors.join('\n- ')}`, 'error', messageArea);
-        currentMermaidSyntax = 'graph TD; Error["Parsing failed or model invalid."];';
         
-        // Hide model title if model is invalid
-        const modelTitleElement = document.getElementById('modelTitle');
-        if (modelTitleElement) {
-            modelTitleElement.classList.add('hidden');
-        }
-        
-        if (modelTabPanel.getAttribute('data-active') === 'true') {
-            renderMermaid(currentMermaidSyntax, mermaidDiagramContainer);
-        }
+        // Enable sim button only if there are NO errors
+        simTabBtn.disabled = model.errors && model.errors.length > 0;
+        interpTabBtn.disabled = true; // Always disable interp initially
+
     } else {
-        // Parsing failed entirely
-        currentMermaidSyntax = 'graph TD; Error["Parsing failed or model invalid."];';
-        
-        // Hide model title if model is invalid
-        const modelTitleElement = document.getElementById('modelTitle');
-        if (modelTitleElement) {
-            modelTitleElement.classList.add('hidden');
-        }
-        
+        // Handle case where parser failed catastrophically (returned null/undefined)
+        displayMessage('Critical parser failure.', 'error', messageArea);
+        currentMermaidSyntax = 'graph TD; Error["Parser failed critically."];';
         if (modelTabPanel.getAttribute('data-active') === 'true') {
-            renderMermaid(currentMermaidSyntax, mermaidDiagramContainer);
+             renderMermaid(currentMermaidSyntax, mermaidDiagramContainer);
         }
-    }
-}
-
-/**
- * Handles periodic URL updates for sharing
- */
-function handleUrlUpdate() {
-    if (!editor) return;
-    
-    clearTimeout(urlUpdateTimer);
-    urlUpdateTimer = setTimeout(() => {
-        updateUrl(editor.getValue());
-    }, 2000);
-}
-
-/**
- * Handles the simulation button click
- */
-function handleSimulateClick() {
-    if (!editor) return;
-    
-    messageArea.innerHTML = ''; // Clear previous messages
-    if (currentChart) {
-        currentChart.destroy();
-        currentChart = null;
-    }
-    
-    // Clear chart and show loading state
-    resultsChartCtx.clearRect(0, 0, resultsChart.width, resultsChart.height);
-    chartPlaceholder.style.display = 'flex';
-    chartPlaceholder.textContent = 'Running simulation...';
-    interpretationContent.innerHTML = '<p class="text-gray-500">Running simulation...</p>';
-    statusIndicator.textContent = 'Simulating...';
-    simTabBtn.disabled = true;
-    interpTabBtn.disabled = true; // Disable tabs during run
-
-    // Parse the model *before* the timeout to catch immediate errors
-    const dslCode = editor.getValue();
-    const model = parseDSL(dslCode);
-
-    if (model && model.errors.length === 0) {
-        lastValidModel = model; // Store the valid model
-
-        // Use setTimeout to allow the UI to update before potentially long simulation
-        setTimeout(() => {
-            try {
-                // --- A/B Test Logic ---
-                if (model.abTest) {
-                    console.log("Running A/B Test for:", model.abTest.paramName);
-                    // Create parameter overrides
-                    const paramsA = { ...model.params, [model.abTest.paramName]: model.abTest.values[0] };
-                    const paramsB = { ...model.params, [model.abTest.paramName]: model.abTest.values[1] };
-
-                    // Run simulations using the original model but with overridden parameters
-                    const resultsA = runSimulation(model, paramsA);
-                    const resultsB = runSimulation(model, paramsB);
-
-                    statusIndicator.textContent = ''; // Clear status after sim
-
-                    if (resultsA && resultsB) {
-                        lastABResults = {
-                            paramName: model.abTest.paramName,
-                            values: model.abTest.values,
-                            A: resultsA,
-                            B: resultsB
-                        };
-                        lastResults = null; // Clear standard results
-                        
-                        // Generate analysis for both scenarios
-                        const analysisA = interpretSimulationResults(resultsA, model);
-                        const analysisB = interpretSimulationResults(resultsB, model);
-                        lastAnalysis = { A: analysisA, B: analysisB };
-                        
-                        // Feedback loops (same for both scenarios)
-                        lastLoops = findFeedbackLoops(model);
-
-                        const chartConfig = plotABResults(lastABResults, model);
-                        if (chartConfig) {
-                            chartPlaceholder.style.display = 'none';
-                            currentChart = new Chart(resultsChartCtx, chartConfig);
-                            
-                            // Generate and display AB interpretation
-                            displayABInterpretation(lastABResults, model);
-                            
-                            // Enable navigation and switch to results view
-                            displayMessage(`A/B Simulation for ${model.abTest.paramName} completed.`, "info", messageArea);
-                            simTabBtn.disabled = false;
-                            interpTabBtn.disabled = false;
-                            switchTabUI('simulation');
-                        } else {
-                            displayMessage("A/B Simulation completed, but no plot generated.", "info", messageArea);
-                            chartPlaceholder.textContent = 'A/B Simulation completed, no plot data.';
-                            chartPlaceholder.style.display = 'flex';
-                            interpTabBtn.disabled = false; // Interpretation might still be valid
-                            switchTabUI('interpretation');
-                        }
-                    } else {
-                        // One or both A/B simulations failed
-                        throw new Error("One or both A/B simulations failed.");
-                    }
-
-                // --- Standard Simulation Logic ---
-                } else {
-                    console.log("Running Standard Simulation");
-                    // Run simulation without parameter overrides
-                    const results = runSimulation(model); // Pass null or no second arg
-                    statusIndicator.textContent = ''; // Clear status after sim
-                    
-                    if (results) {
-                        lastResults = results;
-                        lastABResults = null; // Clear A/B results
-                        
-                        // Generate analysis and find feedback loops
-                        lastAnalysis = interpretSimulationResults(results, model);
-                        lastLoops = findFeedbackLoops(model);
-                        
-                        const chartConfig = plotResults(results, model);
-                        if (chartConfig) {
-                            chartPlaceholder.style.display = 'none';
-                            currentChart = new Chart(resultsChartCtx, chartConfig);
-                            
-                            // Update interpretation panel
-                            displayInterpretation(model, lastAnalysis, lastLoops);
-                            
-                            // Enable navigation and show success message
-                            displayMessage("Simulation completed.", "info", messageArea);
-                            simTabBtn.disabled = false;
-                            interpTabBtn.disabled = false;
-                            switchTabUI('simulation');
-                        } else {
-                            displayMessage("Simulation completed, but no plot generated.", "info", messageArea);
-                            chartPlaceholder.textContent = 'Simulation completed, no plot data.';
-                            chartPlaceholder.style.display = 'flex';
-                            interpTabBtn.disabled = false;
-                            switchTabUI('interpretation');
-                        }
-                    } else {
-                        // Simulation function returned null (likely an error during sim)
-                        throw new Error("Simulation failed to produce results.");
-                    }
-                }
-            } catch (e) {
-                // Catch errors during simulation or post-simulation analysis
-                statusIndicator.textContent = '';
-                displayMessage(`Error during simulation/analysis: ${e.message}`, 'error', messageArea);
-                console.error("Simulation/Analysis error:", e);
-                chartPlaceholder.textContent = 'Analysis failed.';
-                chartPlaceholder.style.display = 'flex';
-                interpretationContent.innerHTML = `<p class="text-red-600">Analysis failed: ${e.message}</p>`;
-                interpTabBtn.disabled = true;
-                switchTabUI('model');
-            }
-        }, 50); // Short delay for UI update
-    } else {
-        // Parsing failed before simulation attempt
-        chartPlaceholder.textContent = 'Cannot simulate: parsing errors.';
-        interpretationContent.innerHTML = '<p class="text-red-600">Cannot simulate due to parsing errors.</p>';
-        statusIndicator.textContent = '';
         simTabBtn.disabled = true;
         interpTabBtn.disabled = true;
+    }
+    
+    // Schedule URL update
+    clearTimeout(urlUpdateTimer);
+    urlUpdateTimer = setTimeout(handleUrlUpdate, 1500);
+}
+
+/**
+ * Updates the URL with the current model for sharing
+ */
+function handleUrlUpdate() {
+    const currentCode = editor.getValue().trim();
+    if (currentCode.length > 0) {
+        updateUrl(currentCode);
+    }
+}
+
+/**
+ * Handles the simulate button click
+ */
+async function handleSimulateClick() {
+    if (!editor) return;
+
+    // 1. Clear Outputs & Update Status
+    clearOutputs();
+    displayMessage("Parsing model...", "info", messageArea);
+    statusIndicator.textContent = "Parsing & Preparing...";
+    statusIndicator.className = "status-busy";
+    let model, variationsToRun, allSimulationResults, analysisResult;
+
+    try {
+        // 1. Get DSL Text
+        const dslText = editor.getValue();
+
+        // 2. Parse DSL
+        let model = parseDSL(dslText);
+        console.log("[DEBUG app] Parsed model object (checking sweeps/scenarios):", {
+            sweeps: model?.sweeps,
+            scenarios: model?.scenarios
+        });
         
-        if (model && model.errors.length > 0) {
-            displayMessage(`Cannot simulate due to parsing errors:\n- ${model.errors.join('\n- ')}`, "error", messageArea);
+        if (!model || model.errors?.length > 0) {
+            // Display errors even if we attempt partial rendering
+            displayMessage("DSL Parsing Errors (displaying potentially incomplete model):\n" + model.errors.join("\n"), "error", messageArea);
+            // If parsing failed critically, stop before simulation
+            if (!model) throw new Error("Parsing failed critically.");
+            // Don't throw yet if partial model exists, let visualization try
         } else {
-            displayMessage("Cannot simulate: Invalid or missing model.", "error", messageArea);
+             displayMessage("DSL parsed successfully.", "info", messageArea);
+             lastSuccessfulModel = model; // Store the last fully successful parse
         }
+
+        // Keep the original parsed model
+        const originalModel = model; 
+
+        // 3. Prepare Variations (Combines Scenarios & Sweeps)
+        displayMessage("Preparing simulation variations...", "info", messageArea, true);
+        const preparationResult = prepareVariations(originalModel, config.MAX_VARIATIONS);
+        const variationsToRun = preparationResult.configurations;
+        console.log(`[DEBUG app] Prepared ${variationsToRun.length} variations:`, variationsToRun.map(v => v.identifier));
+
+        if (preparationResult.limitReached) {
+             displayMessage(`Warning: Maximum variation limit (${config.MAX_VARIATIONS}) reached. Only the first ${variationsToRun.length} variations will be run.`, "warning", messageArea, true);
+        }
+        if (variationsToRun.length === 0) {
+             throw new Error("No simulation variations could be prepared. Check model definition (scenarios/sweeps).");
+        }
+
+        // 4. Run Variations (asynchronously)
+        displayMessage(`Running ${variationsToRun.length} simulation variations...`, "info", messageArea, true);
+        statusIndicator.textContent = "Simulating...";
+        
+        setTimeout(async () => { 
+            let analysisResult = null;
+            let allSimulationResults = null;
+            try {
+                // Pass the ORIGINAL model and the prepared configurations
+                allSimulationResults = runVariations(originalModel, variationsToRun);
+                lastResults = allSimulationResults; // Store the new structure
+
+                // --- Handle Partial Failures --- 
+                const variationIDs = Object.keys(allSimulationResults.variations);
+                const failedVariations = variationIDs.filter(id => allSimulationResults.variations[id].error);
+                const successfulVariations = variationIDs.filter(id => !allSimulationResults.variations[id].error);
+                const successCount = successfulVariations.length;
+                const failureCount = failedVariations.length;
+
+                if (successCount === 0) {
+                    // If ALL failed, report the first error
+                    const firstErrorMsg = failedVariations.length > 0 ? allSimulationResults.variations[failedVariations[0]].message : "Unknown simulation error.";
+                    throw new Error(`All ${variationIDs.length} simulation variations failed. First error: ${firstErrorMsg}`);
+                }
+                
+                let simResultMessage = "";
+                if (failureCount > 0) {
+                     simResultMessage = `Simulations complete. ${successCount} successful, ${failureCount} failed. Analyzing successful runs...`;
+                     console.warn(`[WARN app] Failed variations: ${failedVariations.join(', ')}`);
+                     // Optionally display which ones failed in the message area?
+                     // displayMessage(`Failed variations: ${failedVariations.join(', ')}`, "warning", messageArea, true); // Append warning
+                } else {
+                     simResultMessage = `Simulations complete (${successCount} variations). Analyzing results...`;
+                }
+
+                displayMessage(simResultMessage, "info", messageArea, true);
+                statusIndicator.textContent = "Analyzing...";
+                statusIndicator.className = "status-busy";
+
+                // 5. Analyze Results (Use the original parsed 'model' for structure info)
+                analysisResult = analyzeSimulationResults(allSimulationResults, originalModel); 
+                lastAnalysis = analysisResult; 
+                lastLoops = findFeedbackLoops(originalModel); 
+                console.log(`[DEBUG app] Analysis complete. Found ${lastLoops?.length || 0} loops.`);
+                
+                // 6. Enable Tabs
+                simTabBtn.disabled = false;
+                interpTabBtn.disabled = false;
+                
+                // 7. Plot Results
+                displayMessage("Plotting results...", "info", messageArea, true);
+                await new Promise(resolve => setTimeout(resolve, 10)); // Allow UI update
+                
+                const { comparisonChart, detailCharts } = plotResults(allSimulationResults, resultsChartCtx, resultsChartContainer, chartPlaceholder, originalModel);
+                lastChartImages = null; // Reset images
+                
+                // Capture chart images after a short delay to ensure rendering
+                // await captureChartImages(comparisonChart, detailCharts);
+                
+                // 8. Display Interpretation
+                displayInterpretation(analysisResult, interpretationContent, lastLoops);
+                
+                // Ensure the Sim tab is visible after successful run
+                switchTabUI('simulation'); 
+                statusIndicator.textContent = "Complete";
+                displayMessage(`Simulation and analysis complete for ${successCount} variations.`, "success", messageArea, true);
+
+                // 9. Update URL
+                // Debounce URL updates to avoid excessive history entries
+                handleUrlUpdate(); 
+
+                // ADDED LOG BELOW
+                console.log("[DEBUG] Structure of lastAnalysis:", JSON.stringify(lastAnalysis, null, 2));
+
+            } catch (error) { 
+                console.error('Error during simulation process:', error);
+                displayMessage(`Error: ${error.message}`, "error", messageArea);
+                statusIndicator.textContent = "Error";
+                interpretationContent.innerHTML = `<p class="text-red-600">An error occurred: ${error.message}</p>`;
+                chartPlaceholder.textContent = 'Simulation failed.';
+                chartPlaceholder.classList.remove('hidden');
+                resultsChart.classList.add('hidden');
+                if (window.currentChart) {
+                     window.currentChart.destroy();
+                     window.currentChart = null;
+                }
+                lastChartImages = null; // Clear images on error
+                lastSuccessfulModel = null; // Clear on any error during the process
+            }
+        }, 0);
+
+    } catch (error) { 
+        console.error('Error during simulation process:', error);
+        displayMessage(`Error: ${error.message}`, "error", messageArea);
+        statusIndicator.textContent = "Error";
+        interpretationContent.innerHTML = `<p class="text-red-600">An error occurred: ${error.message}</p>`;
+        chartPlaceholder.textContent = 'Simulation failed.';
+        chartPlaceholder.classList.remove('hidden');
+        resultsChart.classList.add('hidden');
+        if (window.currentChart) {
+             window.currentChart.destroy();
+             window.currentChart = null;
+        }
+        lastChartImages = null; // Clear images on error
+        lastSuccessfulModel = null; // Clear on any error during the process
     }
 }
 
@@ -442,7 +498,7 @@ function handleSimulateClick() {
  * Show the report generation modal
  */
 function showReportModal() {
-    if (!lastValidModel) {
+    if (!lastSuccessfulModel) {
         displayMessage("You need to run a simulation before generating a report.", "error", messageArea);
         return;
     }
@@ -461,42 +517,38 @@ function hideReportModal() {
  * Handle PDF report generation
  */
 async function handleGeneratePdf() {
-    if (!lastValidModel || !editor) {
-        displayMessage("No valid model available for report generation.", "error", messageArea);
+    // Use lastSuccessfulModel for report generation
+    if (!lastSuccessfulModel) { 
+        displayMessage("No successfully simulated model available for report generation. Please run simulation again.", "error", messageArea);
         return;
     }
+    if (!editor) return;
     
-    // Collect report options
     const options = {
         includeModelSummary: includeModelSummary.checked,
         includeSimSummary: includeSimSummary.checked,
         includeLoops: includeLoops.checked,
+        includeCharts: document.getElementById('includeCharts')?.checked ?? false,
         includeDsl: includeDsl.checked
     };
     
+    displayMessage("Generating PDF report...", "info", messageArea, 3000);
     try {
-        // Select the appropriate results based on whether we have A/B test or standard results
-        const results = lastABResults || lastResults;
-        const analysis = lastAnalysis;
-        
-        // Generate the report HTML
         const reportHtml = generateReport(
-            lastValidModel,
-            results,
-            analysis,
+            lastSuccessfulModel,
+            lastResults,
+            lastAnalysis,
             lastLoops,
             editor.getValue(),
-            options
+            options,
+            lastChartImages
         );
-        
-        // Generate PDF from the HTML
-        await generatePDF(reportHtml);
-        
+        generatePDF(reportHtml, `SD_Report_${Date.now()}.pdf`);
         hideReportModal();
         displayMessage("PDF report generated and downloaded.", "info", messageArea);
     } catch (error) {
         console.error("Error generating PDF:", error);
-        displayMessage("Error generating PDF report: " + error.message, "error", messageArea);
+        displayMessage(`Error generating PDF: ${error.message}`, "error", messageArea);
     }
 }
 
@@ -504,77 +556,69 @@ async function handleGeneratePdf() {
  * Handle HTML report generation
  */
 function handleGenerateHtml() {
-    if (!lastValidModel || !editor) {
-        displayMessage("No valid model available for report generation.", "error", messageArea);
+    // Use lastSuccessfulModel for report generation
+    if (!lastSuccessfulModel) { 
+        displayMessage("No successfully simulated model available for report generation. Please run simulation again.", "error", messageArea);
         return;
     }
-    
-    // Collect report options
+     if (!editor) return;
+     
     const options = {
         includeModelSummary: includeModelSummary.checked,
         includeSimSummary: includeSimSummary.checked,
         includeLoops: includeLoops.checked,
+        includeCharts: document.getElementById('includeCharts')?.checked ?? false,
         includeDsl: includeDsl.checked
     };
     
+    displayMessage("Generating HTML report...", "info", messageArea, 3000);
     try {
-        // Select the appropriate results based on whether we have A/B test or standard results
-        const results = lastABResults || lastResults;
-        const analysis = lastAnalysis;
-        
-        // Generate the report HTML
         const reportHtml = generateReport(
-            lastValidModel,
-            results,
-            analysis,
+            lastSuccessfulModel,
+            lastResults,
+            lastAnalysis,
             lastLoops,
             editor.getValue(),
-            options
+            options,
+            lastChartImages
         );
-        
-        // Save the HTML to a file
-        saveHTML(reportHtml);
-        
+        saveHTML(reportHtml, `SD_Report_${Date.now()}.html`);
         hideReportModal();
         displayMessage("HTML report generated and downloaded.", "info", messageArea);
     } catch (error) {
         console.error("Error generating HTML:", error);
-        displayMessage("Error generating HTML report: " + error.message, "error", messageArea);
+        displayMessage(`Error generating HTML: ${error.message}`, "error", messageArea);
     }
 }
 
 /**
- * Clear all outputs
+ * Clears simulation outputs and resets UI
  */
 function clearOutputs() {
-    if (currentChart) {
-        currentChart.destroy();
-        currentChart = null;
+    // Clear previous messages
+    messageArea.innerHTML = '';
+    
+    // Clear previous chart
+    if (window.currentChart) {
+        window.currentChart.destroy();
+        window.currentChart = null;
     }
     
-    // Reset chart area
+    // Clear chart and show loading state
     resultsChartCtx.clearRect(0, 0, resultsChart.width, resultsChart.height);
-    chartPlaceholder.style.display = 'flex';
-    chartPlaceholder.textContent = 'Click "Run Simulation" to see results.';
+    chartPlaceholder.textContent = 'Running simulation...';
+    chartPlaceholder.classList.remove('hidden');
+    resultsChart.classList.add('hidden');
     
     // Reset interpretation panel
-    interpretationContent.innerHTML = '<p class="text-gray-500">Run simulation to generate interpretation...</p>';
+    interpretationContent.innerHTML = '<p class="text-gray-500">Running simulation...</p>';
     
-    // Clear references to previous results
-    lastResults = null;
-    lastABResults = null;
-    lastAnalysis = null;
-    lastLoops = null;
+    // Update status indicator
+    statusIndicator.textContent = 'Simulating...';
     
-    // Disable result tabs
+    // Disable tabs during simulation
     simTabBtn.disabled = true;
     interpTabBtn.disabled = true;
-    
-    // Switch to model tab
-    switchTabUI('model');
-    
-    // Show confirmation message
-    displayMessage("Outputs cleared.", "info", messageArea);
 }
 
 /**
@@ -612,63 +656,65 @@ function switchTabUI(tabId) {
 function setupEditor() {
     const editorContainer = document.getElementById('editor-container');
     if (!editorContainer) return;
-    
-    // Sample DSL content
-    const initialContent = `# Minimal Population Model
-title Simple Population & Resources Model
 
-# Stocks
-stock Population = 1000
-stock Resources = 5000
+    // Default model text showcasing v1.2 features
+    const defaultModelText = `
+title Simple Population & Resources Model v1.2
 
-# Parameters
-param BirthRate = 0.05
-param ResourceConsumptionRate = 1.2
+# Simple Population & Resources Model v1.2
 
-# Flows
-flow Births = Population * BirthRate * (Resources / 5000)
-flow Deaths = Population * (1 - Resources / 10000)
-flow ResourceDepletion = Population * ResourceConsumptionRate
+constant BirthRate = 0.02 # births per person per year
+constant DeathRateFactor = 0.001 # Factor for resource-dependent death rate
+constant InitialPopulation = 1000 # people
+constant InitialResources = 10000 # units
+constant ResourceConsumptionRate = 1 # units per person per year
 
-# Connections
-connect Births -> Population
-connect Deaths <- Population
-connect ResourceDepletion <- Resources
+stock Population = InitialPopulation
+stock Resources = InitialResources
 
-# Simulation settings
-sim 0 40 0.5
+flow Births:
+    Population * BirthRate -+> Population
 
-# A/B test different consumption rates
-abtest param ResourceConsumptionRate = [1.2, 0.8]`;
+flow Deaths:
+     (Resources > 1e-6 ? Population * DeathRateFactor * Population / Resources : 0) --> Population
 
-    // Create CodeMirror editor
+flow ResourceDepletion:
+    Population * ResourceConsumptionRate --> Resources
+
+limit Resources min=0
+limit Population min=0
+
+constant StartTime = 0
+constant EndTime = 40
+constant TimeStep = 0.5
+
+sweep param BirthRate = [0.02, 0.03]
+plot Population
+`;
+
+    // Initialize CodeMirror
     editor = CodeMirror(editorContainer, {
-        value: initialContent,
-        mode: "dsl",
+        value: defaultModelText, 
+        mode: "dsl", // Use our custom DSL mode
         lineNumbers: true,
         lineWrapping: true,
         theme: "default",
-        indentWithTabs: false,
-        tabSize: 2,
-        indentUnit: 2,
         matchBrackets: true,
-        autoCloseBrackets: true
+        autoCloseBrackets: true,
+        gutters: ["CodeMirror-lint-markers"],
+        lint: true
     });
-    
-    // Set up event listener for changes
-    editor.on("change", () => {
-        debouncedParseAndVisualize();
-    });
-}
 
-// Debounced parse and visualize function
-const debouncedParseAndVisualize = debounce(() => {
-    statusIndicator.textContent = 'Updating diagram...';
-    updateVisualization();
-    // Also trigger URL update (less frequently)
-    handleUrlUpdate();
-    setTimeout(() => { statusIndicator.textContent = ''; }, 1000);
-}, DEBOUNCE_DELAY);
+    // Debounced update visualization
+    editor.on("change", debounce(() => {
+        updateVisualization();
+        // Debounce URL update separately
+        clearTimeout(urlUpdateTimer);
+        urlUpdateTimer = setTimeout(() => {
+            updateUrl(editor.getValue());
+        }, 1500); // Longer delay for URL update
+    }, DEBOUNCE_DELAY));
+}
 
 /**
  * Opens the DSL documentation in a new tab

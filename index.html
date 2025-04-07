@@ -64,17 +64,6 @@
             <label for="editor" class="block text-sm font-medium text-gray-700 mb-1 flex-shrink-0"></label>
             <div id="messageArea" class="flex-shrink-0 text-xs max-h-[15vh] overflow-y-auto mb-1"></div>
             <div id="editor-container" class="flex-grow"></div>
-            <div class="syntax-guide mt-2 text-xs text-gray-600">
-                <span class="font-semibold">DSL Keywords:</span> 
-                <span class="dsl-keyword-blue">stock</span>, 
-                <span class="dsl-keyword-blue">flow</span>, 
-                <span class="dsl-keyword-blue">aux</span>, 
-                <span class="dsl-keyword-blue">param</span>, 
-                <span class="dsl-keyword-blue">title</span>, 
-                <span class="dsl-keyword-blue">graph</span> |
-                <span class="dsl-keyword-orange">abtest</span> |
-                <span class="dsl-value-green">values</span>
-            </div>
         </div>
 
         <div class="flex flex-col flex-grow overflow-hidden">
@@ -90,7 +79,7 @@
                          <div class="mermaid">graph TD; A["Loading..."];</div>
                      </div>
                 </div>
-                <div id="simulationTabPanel" data-panel="simulation" class="tab-panel w-full h-full p-4 overflow-hidden">
+                <div id="simulationTabPanel" data-panel="simulation" class="tab-panel w-full h-full p-4">
                     <div id="resultsChartContainer">
                         <canvas id="resultsChart"></canvas>
                         <p id="chartPlaceholder" class="absolute inset-0 flex items-center justify-center text-center text-gray-500">Click 'Run Simulation' to see results.</p>
@@ -115,6 +104,7 @@
           <div><label class="inline-flex items-center"><input type="checkbox" id="includeModelSummary" class="form-checkbox h-4 w-4 text-indigo-600" checked> <span class="ml-2 text-sm">Model Summary (Vars/Eqs)</span></label></div>
           <div><label class="inline-flex items-center"><input type="checkbox" id="includeSimSummary" class="form-checkbox h-4 w-4 text-indigo-600" checked> <span class="ml-2 text-sm">Simulation Summary (Metrics/Patterns)</span></label></div>
           <div><label class="inline-flex items-center"><input type="checkbox" id="includeLoops" class="form-checkbox h-4 w-4 text-indigo-600" checked> <span class="ml-2 text-sm">Feedback Loops</span></label></div>
+          <div><label class="inline-flex items-center"><input type="checkbox" id="includeCharts" class="form-checkbox h-4 w-4 text-indigo-600" checked> <span class="ml-2 text-sm">Simulation Charts</span></label></div>
           <div><label class="inline-flex items-center"><input type="checkbox" id="includeDsl" class="form-checkbox h-4 w-4 text-indigo-600" checked> <span class="ml-2 text-sm">DSL Code</span></label></div>
         </div>
         <div class="flex flex-col space-y-3">

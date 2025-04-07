@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Dynamics Tool v1.2 - Diagnostics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <style>
+        .debug-console {
+            background-color: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        .test-button {
+            margin: 5px;
+            padding: 8px 16px;
+            border-radius: 4px;
+            background-color: #2563eb;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .test-button:hover {
+            background-color: #1d4ed8;
+        }
+        
+        .test-button:disabled {
+            background-color: #93c5fd;
+            cursor: not-allowed;
+        }
+        
+        .success {
+            color: #10b981;
+        }
+        
+        .error {
+            color: #ef4444;
+        }
+        
+        .warning {
+            color: #f59e0b;
+        }
+        
+        .code-display {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 10px 0;
+            overflow-x: auto;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold mb-2">System Dynamics Tool v1.2 - Diagnostics</h1>
+        <p class="mb-6 text-gray-600">This page tests individual components of the parameter sweep functionality</p>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Test Controls -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-4">Test Controls</h2>
+                
+                <div class="flex flex-col space-y-2">
+                    <button id="testParser" class="test-button">1. Test Parser</button>
+                    <button id="testValidation" class="test-button" disabled>2. Test Sweep Validation</button>
+                    <button id="testSimulation" class="test-button" disabled>3. Test Simulation</button>
+                    <button id="testPlotting" class="test-button" disabled>4. Test Plotting</button>
+                    <button id="testAnalysis" class="test-button" disabled>5. Test Analysis</button>
+                    <button id="testFullPipeline" class="test-button">6. Run Full Pipeline</button>
+                </div>
+                
+                <div class="mt-6">
+                    <h3 class="text-lg font-medium mb-2">Test Input</h3>
+                    <textarea id="testInput" rows="15" class="w-full border border-gray-300 rounded p-2 font-mono text-sm" spellcheck="false">time start: 0
+time end: 36
+time step: 1
+time unit: "months"
+
+stock: LoanBalance = 10000
+
+constant: InitialLoanAmount = 10000
+constant: MonthlyPayment = 300
+constant: InterestRate = 0.05
+
+sweep: InterestRate = [0.03, 0.05, 0.07, 0.10]
+
+calc: MonthlyInterest = LoanBalance * (InterestRate / 12)
+calc: PrincipalPortion = min(MonthlyPayment, LoanBalance)
+calc: InterestPortion = min(MonthlyInterest, MonthlyPayment - PrincipalPortion)
+calc: TotalPayment = PrincipalPortion + InterestPortion
+
+flow: InterestAccrual = MonthlyInterest -> LoanBalance
+flow: PaymentDeduction = PrincipalPortion <- LoanBalance</textarea>
+                </div>
+            </div>
+            
+            <!-- Test Results -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-4">Test Results</h2>
+                
+                <div id="testResults" class="mb-4">
+                    <p class="text-gray-500">Run tests to see results...</p>
+                </div>
+                
+                <div id="chartContainer" class="h-64 mb-4 hidden">
+                    <canvas id="resultsChart"></canvas>
+                </div>
+                
+                <h3 class="text-lg font-medium mt-4 mb-2">Debug Log</h3>
+                <div id="debugConsole" class="debug-console">
+                    <div id="debugOutput"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-6 bg-white p-6 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4">Module Inspection</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h3 class="text-lg font-medium mb-2">Parser Module</h3>
+                    <div id="parserInfo" class="code-display">Loading...</div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-2">Simulation Module</h3>
+                    <div id="simulationInfo" class="code-display">Loading...</div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-2">Plotting Module</h3>
+                    <div id="plottingInfo" class="code-display">Loading...</div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium mb-2">Analysis Module</h3>
+                    <div id="analysisInfo" class="code-display">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // Debug logging
+        function debugLog(message, data = null, type = 'info') {
+            const timestamp = new Date().toISOString().substr(11, 12);
+            let logMsg = data 
+                ? `${timestamp} - ${message}: ${JSON.stringify(data, null, 2)}`
+                : `${timestamp} - ${message}`;
+            
+            console.log(logMsg);
+            
+            const debugOutput = document.getElementById('debugOutput');
+            const logLine = document.createElement('div');
+            logLine.textContent = logMsg;
+            
+            if (type === 'success') logLine.classList.add('success');
+            if (type === 'error') logLine.classList.add('error');
+            if (type === 'warning') logLine.classList.add('warning');
+            
+            debugOutput.appendChild(logLine);
+            debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
+        
+        // Override console.error
+        const originalError = console.error;
+        console.error = function() {
+            const args = Array.from(arguments);
+            originalError.apply(console, args);
+            
+            let errorMsg = '';
+            args.forEach(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        errorMsg += JSON.stringify(arg, null, 2) + ' ';
+                    } catch (e) {
+                        errorMsg += arg + ' ';
+                    }
+                } else {
+                    errorMsg += arg + ' ';
+                }
+            });
+            
+            debugLog(errorMsg, null, 'error');
+        };
+        
+        // Test Results
+        function updateTestResults(html) {
+            document.getElementById('testResults').innerHTML = html;
+        }
+        
+        // DOM Elements
+        const testInput = document.getElementById('testInput');
+        const testParser = document.getElementById('testParser');
+        const testValidation = document.getElementById('testValidation');
+        const testSimulation = document.getElementById('testSimulation');
+        const testPlotting = document.getElementById('testPlotting');
+        const testAnalysis = document.getElementById('testAnalysis');
+        const testFullPipeline = document.getElementById('testFullPipeline');
+        const chartContainer = document.getElementById('chartContainer');
+        const resultsChart = document.getElementById('resultsChart');
+        
+        // Module displays
+        const parserInfo = document.getElementById('parserInfo');
+        const simulationInfo = document.getElementById('simulationInfo');
+        const plottingInfo = document.getElementById('plottingInfo');
+        const analysisInfo = document.getElementById('analysisInfo');
+        
+        // State variables
+        let parsedModel = null;
+        let simulationResults = null;
+        let chart = null;
+        
+        // Import modules
+        let modules = {};
+        
+        async function loadModules() {
+            try {
+                debugLog("Loading test utility module...");
+                
+                try {
+                    modules.utils = await import('./scripts/sweep_test_utils.js');
+                    debugLog("Test utilities loaded", Object.keys(modules.utils), 'success');
+                    
+                    // Get module info from utilities
+                    const moduleInfo = modules.utils.getModuleInfo();
+                    
+                    // Update module info displays
+                    parserInfo.textContent = moduleInfo.parser.available 
+                        ? `Available: Yes\nFunctions: ${moduleInfo.parser.functions.join(', ')}`
+                        : 'Available: No';
+                        
+                    simulationInfo.textContent = moduleInfo.simulation.available 
+                        ? `Available: Yes\nFunctions: ${moduleInfo.simulation.functions.join(', ')}`
+                        : 'Available: No';
+                        
+                    plottingInfo.textContent = moduleInfo.plotting.available 
+                        ? `Available: Yes\nFunctions: ${moduleInfo.plotting.functions.join(', ')}`
+                        : 'Available: No';
+                        
+                    analysisInfo.textContent = moduleInfo.analysis.available 
+                        ? `Available: Yes\nFunctions: ${moduleInfo.analysis.functions.join(', ')}`
+                        : 'Available: No';
+                    
+                } catch (e) {
+                    debugLog("Failed to load test utility module", e.message, 'error');
+                    parserInfo.textContent = `Error: ${e.message}`;
+                    simulationInfo.textContent = `Error: ${e.message}`;
+                    plottingInfo.textContent = `Error: ${e.message}`;
+                    analysisInfo.textContent = `Error: ${e.message}`;
+                }
+                
+                // Import other modules directly if needed
+                try {
+                    modules.parser = await import('./scripts/parser.js');
+                    modules.simulation = await import('./scripts/simulation.js');
+                    modules.plotting = await import('./scripts/plotting.js');
+                    modules.analysis = await import('./scripts/analysis.js');
+                    debugLog("All modules imported", null, 'success');
+                } catch (moduleError) {
+                    debugLog("Failed to import some modules", moduleError.message, 'warning');
+                }
+                
+            } catch (error) {
+                debugLog("Error loading modules", error.message, 'error');
+            }
+        }
+        
+        // Test parser
+        async function runParserTest() {
+            debugLog("Running parser test...");
+            try {
+                const dslText = testInput.value;
+                
+                if (!modules.parser || !modules.parser.parseDSLv1_2) {
+                    throw new Error("Parser module or parseDSLv1_2 function not available");
+                }
+                
+                // Parse model
+                parsedModel = modules.parser.parseDSLv1_2(dslText);
+                
+                // Check for parse errors
+                if (parsedModel.errors && parsedModel.errors.length > 0) {
+                    throw new Error(`Parsing errors: ${parsedModel.errors.join(", ")}`);
+                }
+                
+                // Log the model structure
+                debugLog("Model structure", {
+                    timeSettings: parsedModel.timeSettings,
+                    constants: Object.keys(parsedModel.constants || {}),
+                    stocks: Object.keys(parsedModel.stocks || {}),
+                    flows: Object.keys(parsedModel.flows || {}),
+                    calcs: Object.keys(parsedModel.calcs || {}),
+                    sweeps: parsedModel.sweeps ? Object.keys(parsedModel.sweeps) : "none"
+                }, 'success');
+                
+                // Enable next test button
+                testValidation.disabled = false;
+                
+                // Update test results
+                updateTestResults(`
+                    <div class="bg-green-100 border-l-4 border-green-500 p-4">
+                        <p class="font-bold text-green-800">Parser Test: Success</p>
+                        <p>Model parsed successfully.</p>
+                        <p class="mt-2 font-semibold">Model components:</p>
+                        <ul class="list-disc ml-5">
+                            <li>Constants: ${Object.keys(parsedModel.constants || {}).length}</li>
+                            <li>Stocks: ${Object.keys(parsedModel.stocks || {}).length}</li>
+                            <li>Flows: ${Object.keys(parsedModel.flows || {}).length}</li>
+                            <li>Calculations: ${Object.keys(parsedModel.calcs || {}).length}</li>
+                            <li>Sweeps: ${parsedModel.sweeps ? Object.keys(parsedModel.sweeps).length : 0}</li>
+                        </ul>
+                    </div>
+                `);
+                
+                return true;
+            } catch (error) {
+                debugLog("Parser test failed", error.message, 'error');
+                
+                updateTestResults(`
+                    <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                        <p class="font-bold text-red-800">Parser Test: Failed</p>
+                        <p>${error.message}</p>
+                    </div>
+                `);
+                
+                return false;
+            }
+        }
+        
+        // Test sweep validation
+        async function runValidationTest() {
+            debugLog("Running sweep validation test...");
+            try {
+                if (!parsedModel) {
+                    throw new Error("No parsed model available. Run parser test first.");
+                }
+                
+                if (!modules.utils || !modules.utils.validateSweepModel) {
+                    throw new Error("Validation function not available");
+                }
+                
+                // Validate model
+                const validation = modules.utils.validateSweepModel(parsedModel);
+                
+                if (!validation.valid) {
+                    debugLog("Sweep validation failed", validation, 'error');
+                    updateTestResults(`
+                        <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                            <p class="font-bold text-red-800">Sweep Validation: Failed</p>
+                            <p>${validation.message}</p>
+                            <p class="text-gray-700 mt-2">${validation.details}</p>
+                        </div>
+                    `);
+                    return false;
+                }
+                
+                debugLog("Sweep validation successful", validation.details, 'success');
+                
+                // Enable next test button
+                testSimulation.disabled = false;
+                
+                // Format sweep parameters for display
+                const sweepParams = Object.entries(parsedModel.sweeps).map(([param, values]) => {
+                    return `<li>${param}: [${values.join(', ')}]</li>`;
+                }).join('');
+                
+                // Update test results
+                updateTestResults(`
+                    <div class="bg-green-100 border-l-4 border-green-500 p-4">
+                        <p class="font-bold text-green-800">Sweep Validation: Success</p>
+                        <p>${validation.message}</p>
+                        <p class="mt-2 font-semibold">Sweep Parameters:</p>
+                        <ul class="list-disc ml-5">
+                            ${sweepParams}
+                        </ul>
+                    </div>
+                `);
+                
+                return true;
+            } catch (error) {
+                debugLog("Validation test failed", error.message, 'error');
+                
+                updateTestResults(`
+                    <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                        <p class="font-bold text-red-800">Sweep Validation: Failed</p>
+                        <p>${error.message}</p>
+                    </div>
+                `);
+                
+                return false;
+            }
+        }
+        
+        // Test simulation
+        async function runSimulationTest() {
+            debugLog("Running simulation test...");
+            try {
+                if (!parsedModel) {
+                    throw new Error("No parsed model available. Run parser test first.");
+                }
+                
+                if (!modules.simulation || !modules.simulation.runParameterSweep) {
+                    throw new Error("Simulation module or runParameterSweep function not available");
+                }
+                
+                // Run simulation
+                simulationResults = modules.simulation.runParameterSweep(parsedModel);
+                
+                if (!simulationResults) {
+                    throw new Error("Simulation returned no results");
+                }
+                
+                // Run diagnostics on results
+                const diagnostics = modules.utils.diagnoseSimulationResults(simulationResults);
+                
+                if (!diagnostics.success) {
+                    throw new Error(diagnostics.message);
+                }
+                
+                debugLog("Simulation diagnostics", diagnostics, 'success');
+                
+                // Enable next test button
+                testPlotting.disabled = false;
+                
+                // Update test results
+                updateTestResults(`
+                    <div class="bg-green-100 border-l-4 border-green-500 p-4">
+                        <p class="font-bold text-green-800">Simulation Test: Success</p>
+                        <p>Parameter sweep simulation completed successfully.</p>
+                        <p class="mt-2 font-semibold">Simulation details:</p>
+                        <ul class="list-disc ml-5">
+                            <li>Parameter: ${diagnostics.paramName || "N/A"}</li>
+                            <li>Parameter values: ${diagnostics.paramValues?.join(", ") || "N/A"}</li>
+                            <li>Time points: ${diagnostics.timePoints?.count || 0}</li>
+                            <li>Number of simulations: ${diagnostics.simulations?.count || 0}</li>
+                            <li>Stocks monitored: ${diagnostics.stocks?.join(", ") || "None"}</li>
+                            <li>Flows monitored: ${diagnostics.flows?.join(", ") || "None"}</li>
+                            <li>Calculations monitored: ${diagnostics.calculations?.join(", ") || "None"}</li>
+                        </ul>
+                    </div>
+                `);
+                
+                return true;
+            } catch (error) {
+                debugLog("Simulation test failed", error.message, 'error');
+                
+                updateTestResults(`
+                    <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                        <p class="font-bold text-red-800">Simulation Test: Failed</p>
+                        <p>${error.message}</p>
+                    </div>
+                `);
+                
+                return false;
+            }
+        }
+        
+        // Test plotting
+        async function runPlottingTest() {
+            debugLog("Running plotting test...");
+            try {
+                if (!simulationResults) {
+                    throw new Error("No simulation results available. Run simulation test first.");
+                }
+                
+                if (!modules.plotting || !modules.plotting.plotSweepResults) {
+                    throw new Error("Plotting module or plotSweepResults function not available");
+                }
+                
+                // Clean up previous chart
+                if (chart) {
+                    chart.destroy();
+                    chart = null;
+                }
+                
+                // Show chart container
+                chartContainer.classList.remove('hidden');
+                
+                // Plot results
+                const ctx = resultsChart.getContext('2d');
+                const chartConfig = modules.plotting.plotSweepResults(simulationResults, ctx);
+                
+                debugLog("Plotting complete", {
+                    chartConfig: chartConfig ? "Created" : "Not created"
+                }, 'success');
+                
+                chart = chartConfig.chart || window.currentChart;
+                
+                if (!chart) {
+                    throw new Error("Chart was not created");
+                }
+                
+                // Enable next test button
+                testAnalysis.disabled = false;
+                
+                // Update test results
+                updateTestResults(`
+                    <div class="bg-green-100 border-l-4 border-green-500 p-4">
+                        <p class="font-bold text-green-800">Plotting Test: Success</p>
+                        <p>Chart created successfully.</p>
+                    </div>
+                `);
+                
+                return true;
+            } catch (error) {
+                debugLog("Plotting test failed", error.message, 'error');
+                
+                updateTestResults(`
+                    <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                        <p class="font-bold text-red-800">Plotting Test: Failed</p>
+                        <p>${error.message}</p>
+                    </div>
+                `);
+                
+                return false;
+            }
+        }
+        
+        // Test analysis
+        async function runAnalysisTest() {
+            debugLog("Running analysis test...");
+            try {
+                if (!simulationResults) {
+                    throw new Error("No simulation results available. Run simulation test first.");
+                }
+                
+                if (!modules.analysis || !modules.analysis.interpretSweepResults) {
+                    throw new Error("Analysis module or interpretSweepResults function not available");
+                }
+                
+                // Interpret results
+                const interpretation = modules.analysis.interpretSweepResults(simulationResults);
+                
+                debugLog("Analysis complete", {
+                    hasInterpretation: !!interpretation,
+                    insights: interpretation?.insights?.length || 0,
+                    comparisons: interpretation?.comparisons?.length || 0
+                }, 'success');
+                
+                // Display interpretation
+                const analysisOutput = document.createElement('div');
+                modules.analysis.displaySweepInterpretation(simulationResults, interpretation, analysisOutput);
+                
+                // Update test results
+                updateTestResults(`
+                    <div class="bg-green-100 border-l-4 border-green-500 p-4">
+                        <p class="font-bold text-green-800">Analysis Test: Success</p>
+                        <p>Analysis completed successfully.</p>
+                        <p class="mt-2 font-semibold">Interpretation:</p>
+                        <div class="mt-2 border border-gray-200 p-3 rounded-md">
+                            ${analysisOutput.innerHTML}
+                        </div>
+                    </div>
+                `);
+                
+                return true;
+            } catch (error) {
+                debugLog("Analysis test failed", error.message, 'error');
+                
+                updateTestResults(`
+                    <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                        <p class="font-bold text-red-800">Analysis Test: Failed</p>
+                        <p>${error.message}</p>
+                    </div>
+                `);
+                
+                return false;
+            }
+        }
+        
+        // Run full pipeline test using the test utility
+        async function runFullPipelineTest() {
+            debugLog("Running full pipeline test...");
+            
+            try {
+                updateTestResults(`<p class="text-blue-600">Running full pipeline test...</p>`);
+                
+                if (!modules.utils || !modules.utils.testParameterSweep) {
+                    throw new Error("Test utility module not available");
+                }
+                
+                const dslText = testInput.value;
+                
+                // Run the full test pipeline
+                const testResults = await modules.utils.testParameterSweep(dslText, (msg) => debugLog(msg));
+                
+                debugLog("Full test results", testResults, 'success');
+                
+                // Process the results
+                if (testResults.overall && testResults.overall.success) {
+                    updateTestResults(`
+                        <div class="bg-green-100 border-l-4 border-green-500 p-4">
+                            <p class="font-bold text-green-800">Full Pipeline Test: Success</p>
+                            <p>${testResults.overall.message}</p>
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <p class="font-semibold">Parsing: ${testResults.parsing.success ? '✅' : '❌'}</p>
+                                    <p class="font-semibold">Validation: ${testResults.validation.valid ? '✅' : '❌'}</p>
+                                    <p class="font-semibold">Simulation: ${testResults.simulation.success ? '✅' : '❌'}</p>
+                                </div>
+                                <div>
+                                    <p class="font-semibold">Plotting: ${testResults.plotting.success ? '✅' : '❌'}</p>
+                                    <p class="font-semibold">Analysis: ${testResults.analysis.success ? '✅' : '❌'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `);
+                } else {
+                    // Find the first failure
+                    let failureStep = "unknown";
+                    let failureMessage = testResults.overall ? testResults.overall.error : "Unknown error";
+                    
+                    if (!testResults.parsing.success) {
+                        failureStep = "parsing";
+                        failureMessage = testResults.parsing.errors ? testResults.parsing.errors.join(", ") : failureMessage;
+                    } else if (!testResults.validation.valid) {
+                        failureStep = "validation";
+                        failureMessage = testResults.validation.message;
+                    } else if (!testResults.simulation.success) {
+                        failureStep = "simulation";
+                        failureMessage = testResults.simulation.message || failureMessage;
+                    } else if (!testResults.plotting.success) {
+                        failureStep = "plotting";
+                        failureMessage = testResults.plotting.error || failureMessage;
+                    } else if (!testResults.analysis.success) {
+                        failureStep = "analysis";
+                        failureMessage = testResults.analysis.error || failureMessage;
+                    }
+                    
+                    updateTestResults(`
+                        <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                            <p class="font-bold text-red-800">Full Pipeline Test: Failed</p>
+                            <p>Failed at step: ${failureStep}</p>
+                            <p>Error: ${failureMessage}</p>
+                        </div>
+                    `);
+                }
+                
+            } catch (error) {
+                debugLog("Full pipeline test failed", error.message, 'error');
+                
+                updateTestResults(`
+                    <div class="bg-red-100 border-l-4 border-red-500 p-4">
+                        <p class="font-bold text-red-800">Full Pipeline Test: Failed</p>
+                        <p>${error.message}</p>
+                    </div>
+                `);
+            }
+        }
+        
+        // Add event listeners
+        testParser.addEventListener('click', runParserTest);
+        testValidation.addEventListener('click', runValidationTest);
+        testSimulation.addEventListener('click', runSimulationTest);
+        testPlotting.addEventListener('click', runPlottingTest);
+        testAnalysis.addEventListener('click', runAnalysisTest);
+        testFullPipeline.addEventListener('click', runFullPipelineTest);
+        
+        // Initialize
+        (async function init() {
+            await loadModules();
+        })();
+    </script>
+</body>
+</html> 

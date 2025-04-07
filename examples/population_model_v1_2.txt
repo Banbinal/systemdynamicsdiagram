@@ -1,0 +1,58 @@
+# Population Growth Model with Resource Constraints
+# Using DSL System Dynamics v1.2 Syntax
+
+# Time configuration
+constant StartTime = 2000
+constant EndTime = 2100
+constant TimeStep = 0.25
+
+module Demography:
+    stock Population = 1000
+    
+    constant BirthRate = 0.03
+    constant DeathRate = 0.02
+    constant CarryingCapacity = 2000
+    
+    calc PopulationPressure = Population / CarryingCapacity
+    
+    # Use a map to model how resource constraints affect birth rates
+    map ResourceEffect: linear
+        (0.0, 1.2)   # When population is low, birth rate increases
+        (0.5, 1.0)   # At half capacity, normal birth rate
+        (1.0, 0.8)   # At full capacity, reduced birth rate
+        (1.5, 0.5)   # Above capacity, greatly reduced birth rate
+        (2.0, 0.3)   # Far above capacity, severely reduced birth rate
+    
+    calc ActualBirthRate = BirthRate * map(PopulationPressure)
+    
+    # Births flow - adds to population
+    flow Births:
+        Population * ActualBirthRate -+> Population
+    
+    # Deaths flow - removes from population
+    flow Deaths:
+        Population * DeathRate --> Population
+
+module Economy:
+    constant BaseProductivity = 1.0
+    
+    # GDP depends on population and productivity
+    calc GDP = Demography.Population * BaseProductivity * TechnologyFactor
+    
+    # Technology grows over time
+    calc TechnologyFactor = 1.0 + 0.01 * (time - StartTime)
+    
+    # Resource consumption per person
+    calc ResourceConsumptionPerCapita = 1.0
+    
+    # Total resource consumption
+    calc TotalConsumption = Demography.Population * ResourceConsumptionPerCapita
+
+# Define a scenario with higher technology growth
+scenario HighTech:
+    constant Economy.BaseProductivity = 1.5
+    stock Demography.Population = 800
+
+# Define a scenario with higher carrying capacity
+scenario HighCapacity:
+    constant Demography.CarryingCapacity = 3000 
