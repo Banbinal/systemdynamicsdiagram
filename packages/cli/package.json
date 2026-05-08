@@ -1,0 +1,27 @@
+{
+  "name": "@sysdyn/cli",
+  "version": "2.0.0-alpha.0",
+  "description": "Command-line interface for @sysdyn/core. Run, check, and inspect System Dynamics models.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "sysdyn": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "node --experimental-strip-types src/index.ts"
+  },
+  "dependencies": {
+    "@sysdyn/core": "workspace:*",
+    "commander": "^13.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

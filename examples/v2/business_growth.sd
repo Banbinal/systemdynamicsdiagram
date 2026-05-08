@@ -1,0 +1,65 @@
+# Business growth model with marketing-effectiveness sweep.
+# Tracks customers, prospects, and cumulative revenue over 60 months.
+
+StartTime = 0
+EndTime = 60
+TimeStep = 0.25
+
+stock Customers = 100
+stock Prospects = 1000
+stock Revenue = 0
+
+constant CustomerSpendPerMonth = 100
+constant ProspectConversionRate = 0.05
+constant CustomerChurnRate = 0.02
+constant ReferralRate = 0.1
+constant MarketingBudgetPercentage = 0.2
+constant MarketingEffectiveness = 0.01
+constant TotalAddressableMarket = 100000
+
+# Diminishing returns as the market saturates.
+map MarketSaturation: spline
+    (0.0, 1.0)
+    (0.2, 0.9)
+    (0.5, 0.5)
+    (0.8, 0.2)
+    (1.0, 0.0)
+
+calc MonthlyRevenue = Customers * CustomerSpendPerMonth
+calc MarketingBudget = MonthlyRevenue * MarketingBudgetPercentage
+calc NewProspectsFromMarketing = MarketingBudget * MarketingEffectiveness
+calc MarketPenetration = (Customers + Prospects) / TotalAddressableMarket
+calc RemainingMarketPotential = MarketSaturation(MarketPenetration)
+calc NewProspectsFromReferrals = Customers * ReferralRate * RemainingMarketPotential
+calc ConvertedCustomers = Prospects * ProspectConversionRate
+calc LostCustomers = Customers * CustomerChurnRate
+
+flow ProspectAcquisition:
+    NewProspectsFromMarketing -+> Prospects
+    NewProspectsFromReferrals -+> Prospects
+
+flow CustomerConversion:
+    ConvertedCustomers -+> Customers
+    ConvertedCustomers --> Prospects
+
+flow CustomerChurn:
+    LostCustomers --> Customers
+
+flow RevenueGeneration:
+    MonthlyRevenue -+> Revenue
+
+# Unit economics (independent of integration; for reporting).
+calc CustomerLifetimeValue = CustomerSpendPerMonth / CustomerChurnRate
+calc CustomerAcquisitionCost = MarketingBudgetPercentage * CustomerSpendPerMonth / ProspectConversionRate
+calc ROI = (CustomerLifetimeValue - CustomerAcquisitionCost) / CustomerAcquisitionCost
+
+scenario HighSpend:
+    constant MarketingBudgetPercentage = 0.4
+    constant CustomerSpendPerMonth = 80
+
+scenario PremiumOffering:
+    constant CustomerSpendPerMonth = 200
+    constant ProspectConversionRate = 0.03
+    constant CustomerChurnRate = 0.01
+
+sweep MarketingEffectiveness = [0.005, 0.01, 0.015, 0.02, 0.025]

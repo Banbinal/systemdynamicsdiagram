@@ -1,0 +1,4 @@
+# Intentionally cyclic — used to verify `sysdyn check` returns exit 1.
+
+calc A = B + 1
+calc B = A * 2

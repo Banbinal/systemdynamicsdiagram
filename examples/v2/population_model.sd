@@ -1,0 +1,51 @@
+# Population growth with resource constraints, plus a coupled economy module.
+# `time` is the absolute simulation time (years here).
+
+StartTime = 2000
+EndTime = 2100
+TimeStep = 0.25
+
+constant SimStart = 2000     # mirror of StartTime, usable in expressions
+
+module Demography:
+    stock Population = 1000
+
+    constant BirthRate = 0.03
+    constant DeathRate = 0.02
+    constant CarryingCapacity = 2000
+
+    calc PopulationPressure = Population / CarryingCapacity
+
+    # How resource availability scales the birth rate by population pressure.
+    map ResourceEffect: linear
+        (0.0, 1.2)
+        (0.5, 1.0)
+        (1.0, 0.8)
+        (1.5, 0.5)
+        (2.0, 0.3)
+
+    calc ActualBirthRate = BirthRate * ResourceEffect(PopulationPressure)
+
+    flow Births:
+        Population * ActualBirthRate -+> Population
+
+    flow Deaths:
+        Population * DeathRate --> Population
+
+module Economy:
+    constant BaseProductivity = 1.0
+    constant ResourceConsumptionPerCapita = 1.0
+    constant TechGrowthRate = 0.01
+
+    # Technology factor grows linearly from t=SimStart.
+    calc TechnologyFactor = 1.0 + TechGrowthRate * (time - SimStart)
+
+    calc GDP = Demography.Population * BaseProductivity * TechnologyFactor
+    calc TotalConsumption = Demography.Population * ResourceConsumptionPerCapita
+
+scenario HighTech:
+    constant Economy.BaseProductivity = 1.5
+    stock Demography.Population = 800
+
+scenario HighCapacity:
+    constant Demography.CarryingCapacity = 3000

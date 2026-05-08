@@ -1,0 +1,8 @@
+StartTime = 0
+EndTime = 1
+TimeStep = 1
+constant K = 0.1
+stock X = K
+sweep K = [0.1, 0.2]
+scenario Big:
+    constant K = 1

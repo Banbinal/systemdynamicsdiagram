@@ -1,0 +1,29 @@
+# Logistic-style population growth with a single carrying-capacity term.
+# The simplest of the example models — useful for sanity checks.
+
+title Simple Population Model
+
+StartTime = 0
+EndTime = 100
+TimeStep = 0.25
+
+stock Population = 100
+
+constant BirthRate = 0.05
+constant DeathRate = 0.02
+constant CarryingCapacity = 500
+
+calc PopulationPressure = Population / CarryingCapacity
+calc ActualBirthRate = BirthRate * (1 - PopulationPressure * 0.7)
+
+flow Births:
+    Population * ActualBirthRate -+> Population
+
+flow Deaths:
+    Population * DeathRate --> Population
+
+# Population should never go negative.
+limit Population min = 0
+
+plot Population
+plot ActualBirthRate

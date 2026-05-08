@@ -1,0 +1,7 @@
+StartTime = 0
+EndTime = 5
+TimeStep = 1
+constant K = 0.1
+stock X = 1
+flow Growth:
+    X * K -+> X

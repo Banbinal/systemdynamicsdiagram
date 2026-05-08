@@ -1,0 +1,74 @@
+# Forrester's classic supply-chain inventory model.
+#
+# Showcases two builtins that desugar to synthetic stocks under the hood:
+#   - smooth(x, tau)   — exponentially-smoothed forecast
+#   - delay3(x, tau)   — third-order distributed delay (delivery pipeline)
+#
+# Watch what happens after the step demand shock at t = 10:
+# the bullwhip — managers over-react to the inventory dip, orders overshoot,
+# inventory oscillates before settling. Aggressive AdjustmentTime → severe
+# bullwhip; SlowForecast → muted but lagging response.
+
+title Supply Chain Inventory Oscillation
+
+StartTime = 0
+EndTime = 80
+TimeStep = 0.25
+
+stock Inventory = 100
+
+# Demand profile: baseline plus a permanent step at t = 10.
+constant BaselineDemand = 10
+constant DemandShockSize = 5
+constant DemandShockTime = 10
+
+# Decision-rule parameters — the managers' "policy" we'll vary.
+constant ForecastTime = 6
+constant AdjustmentTime = 8
+constant DeliveryDelay = 4
+constant DesiredCoverage = 4
+
+# Demand and forecasting — smooth() builds a hidden stock that exponentially tracks demand.
+calc CustomerOrderRate = BaselineDemand + step(DemandShockSize, DemandShockTime)
+calc ExpectedDemand = smooth(CustomerOrderRate, ForecastTime)
+
+# Order policy: replace expected sales + close the inventory gap.
+calc DesiredInventory = ExpectedDemand * DesiredCoverage
+calc InventoryGap = DesiredInventory - Inventory
+calc DesiredOrderRate = ExpectedDemand + InventoryGap / AdjustmentTime
+calc OrderRate = max(0, DesiredOrderRate)
+
+# Three-stage delivery pipeline — orders take time to materialise.
+calc DeliveryRate = delay3(OrderRate, DeliveryDelay)
+
+flow Receiving:
+    DeliveryRate -+> Inventory
+
+flow Sales:
+    CustomerOrderRate --> Inventory
+
+# Inventory is non-negative; the limit clamps any post-step undershoot.
+limit Inventory min = 0
+
+scenario AggressiveOrdering:
+    constant AdjustmentTime = 2           # over-correct fast → big bullwhip
+
+scenario CautiousOrdering:
+    constant AdjustmentTime = 16          # damped response → smaller swings, slow recovery
+
+scenario LongDelivery:
+    constant DeliveryDelay = 12           # pipeline becomes the dominant delay
+
+scenario SlowForecast:
+    constant ForecastTime = 16            # forecast lags reality → over-ordering
+
+scenario LargerShock:
+    constant DemandShockSize = 15
+
+# Sweep desired weeks-of-coverage — the safety stock target.
+sweep DesiredCoverage = [2, 4, 6, 8]
+
+plot Inventory
+plot OrderRate
+plot CustomerOrderRate
+plot ExpectedDemand

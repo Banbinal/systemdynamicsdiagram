@@ -1,0 +1,62 @@
+# Classic SIR compartmental epidemic model.
+#
+#   Susceptible → Infected → Recovered
+#
+# The basic reproduction number R0 = beta / gamma. When R0 > 1 the
+# disease spreads; the wave peaks when S/N ≈ 1/R0 (herd immunity threshold).
+# N = S + I + R is conserved analytically and within ~1e-9 numerically.
+
+title SIR Epidemic Model
+
+StartTime = 0
+EndTime = 200
+TimeStep = 0.5
+
+# Initial cohort: 999 susceptible, single index case.
+stock Susceptible = 999
+stock Infected = 1
+stock Recovered = 0
+
+constant ContactRate = 0.30               # beta — contacts per person per day
+constant InfectionProbability = 1.0       # transmission probability per contact
+constant RecoveryRate = 0.10              # gamma — 1 / (mean infectious period)
+constant TotalPopulation = 1000
+
+# The force of infection — fraction of contacts that lead to a new case.
+calc InfectionForce = ContactRate * InfectionProbability * Infected / TotalPopulation
+calc NewInfections = Susceptible * InfectionForce
+calc NewRecoveries = Infected * RecoveryRate
+calc R0 = ContactRate * InfectionProbability / RecoveryRate
+
+flow Infection:
+    NewInfections --> Susceptible
+    NewInfections -+> Infected
+
+flow Recovery:
+    NewRecoveries --> Infected
+    NewRecoveries -+> Recovered
+
+limit Susceptible min = 0
+limit Infected min = 0
+limit Recovered min = 0
+
+scenario Quarantine:
+    constant ContactRate = 0.10           # strong NPI: drops R0 to 1.0
+
+scenario LongInfection:
+    constant RecoveryRate = 0.05          # twice the infectious period → much higher peak
+
+scenario HighlyContagious:
+    constant ContactRate = 0.50
+    constant InfectionProbability = 1.20
+
+scenario PartialImmunityStart:
+    stock Susceptible = 600
+    stock Recovered = 399                 # 40% of population already immune
+
+# Sweep the per-contact transmission probability — vaccination, masking, etc.
+sweep InfectionProbability = [0.5, 0.75, 1.0, 1.25, 1.5]
+
+plot Susceptible
+plot Infected
+plot Recovered

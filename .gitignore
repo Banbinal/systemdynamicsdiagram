@@ -30,6 +30,15 @@ jspm_packages/
 dist/
 build/
 out/
+coverage/
+*.tsbuildinfo
+.turbo/
+
+# Vitest
+__snapshots__/.tmp/
+
+# Claude Code workspace state
+.claude/
 
 # Environment variables
 .env
@@ -54,4 +63,23 @@ DEPLOY_TO_HOSTINGER.md
 
 # Local development server
 .python-version
-.htaccess 
+.htaccess
+
+# Legacy v1 web app — kept locally for reference, not part of the OSS repo.
+# The new TypeScript monorepo (packages/core, packages/cli, apps/web) supersedes it.
+apps/legacy-web/
+
+# npm artefacts (we use pnpm)
+package-lock.json
+yarn.lock
+
+# Vite cache
+.vite/
+**/.vite/
+
+# Local override
+*.local
+
+# Local debug probes — never deploy these to public/
+apps/web/public/*-test.html
+apps/web/public/debug-*.html 

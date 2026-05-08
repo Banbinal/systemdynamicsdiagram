@@ -1,0 +1,31 @@
+# Loan payoff analysis with an interest-rate sweep.
+# Models a fixed-payment loan with optional extra payments.
+
+StartTime = 0
+EndTime = 30
+TimeStep = 0.25
+
+stock LoanBalance = 300000
+constant InitialBalance = 300000
+constant PaymentAmount = 20000      # annual payment ($)
+constant InterestRate = 0.05        # annual interest rate
+constant ExtraPayment = 0           # additional payment beyond the regular one
+
+calc AnnualInterest = LoanBalance * InterestRate
+calc TotalPayment = PaymentAmount + ExtraPayment
+
+flow InterestAccrual:
+    AnnualInterest -+> LoanBalance
+
+flow LoanRepayment:
+    TotalPayment --> LoanBalance
+
+# Once the balance reaches zero, post-step clamping keeps it there.
+limit LoanBalance min = 0
+
+calc PayoffProgress = 1 - LoanBalance / InitialBalance
+
+scenario ExtraPayments:
+    constant ExtraPayment = 5000
+
+sweep InterestRate = [0.03, 0.04, 0.05, 0.06, 0.07]

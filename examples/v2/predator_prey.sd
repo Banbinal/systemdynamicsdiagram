@@ -1,0 +1,59 @@
+# Lotka-Volterra predator-prey model.
+#
+# Two coupled stocks oscillate around a fixed point in phase space:
+#   dx/dt =  alpha · x  -  beta  · x · y
+#   dy/dt =  delta · x · y  -  gamma · y
+#
+# The invariant V = delta·x - gamma·log(x) + beta·y - alpha·log(y) is
+# conserved along trajectories, which makes this a strong test of the
+# numerical solver (RK4 keeps it stable to ~1e-3 over 60 time units).
+
+title Predator-Prey Lotka-Volterra
+
+StartTime = 0
+EndTime = 60
+TimeStep = 0.05
+
+stock Prey = 100
+stock Predator = 20
+
+constant PreyBirthRate = 0.4              # alpha — natural prey growth
+constant Predation = 0.012                # beta — predation efficiency
+constant PredatorDeathRate = 0.5          # gamma — natural predator death
+constant ConversionEfficiency = 0.005     # delta — biomass converted to predators
+
+calc Encounters = Prey * Predator
+
+flow PreyBirth:
+    Prey * PreyBirthRate -+> Prey
+
+flow PreyDeath:
+    Encounters * Predation --> Prey
+
+flow PredatorBirth:
+    Encounters * ConversionEfficiency -+> Predator
+
+flow PredatorDeath:
+    Predator * PredatorDeathRate --> Predator
+
+# Populations are non-negative.
+limit Prey min = 0
+limit Predator min = 0
+
+scenario AggressivePredator:
+    constant Predation = 0.020
+    constant ConversionEfficiency = 0.008
+
+scenario WeakPredator:
+    constant Predation = 0.006
+    constant ConversionEfficiency = 0.003
+
+scenario ProlificPrey:
+    constant PreyBirthRate = 0.6
+    stock Prey = 200
+
+# Sweep along the predator death rate to vary cycle frequency.
+sweep PredatorDeathRate = [0.3, 0.4, 0.5, 0.6, 0.7]
+
+plot Prey
+plot Predator

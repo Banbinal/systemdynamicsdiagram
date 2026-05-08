@@ -1,0 +1,135 @@
+# Economic growth with environmental constraints.
+# Three coupled modules: Economy, Population, Environment.
+
+StartTime = 2020
+EndTime = 2100
+TimeStep = 0.25
+
+module Economy:
+    stock Capital = 1000
+    stock Labor = 100
+    stock Technology = 1
+    stock Pollution = 10
+
+    constant CapitalDepreciationRate = 0.05
+    constant InvestmentFraction = 0.2
+    constant LaborGrowthRate = 0.01
+    constant TechnologyGrowthRate = 0.01
+    constant PollutionPerOutput = 0.1
+    constant PollutionAbsorptionTime = 10
+
+    # Cobb-Douglas style production: output = K^0.75 · L^0.25 · A.
+    calc Output = (Capital ^ 0.75) * (Labor ^ 0.25) * Technology
+    calc Investment = Output * InvestmentFraction
+    calc Consumption = Output - Investment
+    calc ConsumptionPerCapita = Consumption / Population.Population
+    calc PollutionGeneration = Output * PollutionPerOutput
+
+    # How environmental quality scales the technology growth rate.
+    map ResearchEffectiveness: spline
+        (0.0, 0.5)
+        (0.5, 0.9)
+        (1.0, 1.0)
+
+    calc ResearchEffectivenessMultiplier = ResearchEffectiveness(Environment.EnvironmentalQuality)
+
+    flow CapitalFormation:
+        Investment -+> Capital
+
+    flow CapitalDepreciation:
+        Capital * CapitalDepreciationRate --> Capital
+
+    flow LaborGrowth:
+        Labor * LaborGrowthRate * Population.FertilityEffect -+> Labor
+
+    flow TechnologyImprovement:
+        Technology * TechnologyGrowthRate * ResearchEffectivenessMultiplier -+> Technology
+
+    flow PollutionCreation:
+        PollutionGeneration -+> Pollution
+
+    flow PollutionAbsorption:
+        Pollution / PollutionAbsorptionTime --> Pollution
+
+module Population:
+    stock Population = 300
+
+    constant BirthRate = 0.03
+    constant DeathRate = 0.01
+    constant PollutionEffectOnMortality = 0.2
+    constant WelfareEffectOnFertility = 0.5
+
+    calc MortalityMultiplier = 1 + PollutionEffectOnMortality * Economy.Pollution / 100
+    calc ActualDeathRate = DeathRate * MortalityMultiplier
+
+    calc WelfareIndex = Economy.ConsumptionPerCapita / 10
+
+    # How welfare scales fertility (high welfare → fewer kids).
+    map FertilityResponse: linear
+        (0.0, 1.5)
+        (1.0, 1.0)
+        (2.0, 0.7)
+        (3.0, 0.6)
+
+    calc FertilityEffect = FertilityResponse(WelfareIndex)
+
+    flow Births:
+        Population * BirthRate * FertilityEffect -+> Population
+
+    flow Deaths:
+        Population * ActualDeathRate --> Population
+
+module Environment:
+    stock NaturalResources = 1000
+    stock Biodiversity = 100
+
+    constant ResourceRegenerationRate = 0.01
+    constant MaxResourceCapacity = 1000
+    constant ResourceExtractionPerCapital = 0.1
+    constant BiodiversityLossRate = 0.02
+
+    calc ResourceExtraction = Economy.Capital * ResourceExtractionPerCapital
+    calc ResourceRegenerationPotential = (MaxResourceCapacity - NaturalResources) * ResourceRegenerationRate
+
+    calc BiodiversityLossMultiplier = 1 + Economy.Pollution / 50
+    calc BiodiversityRecoveryRate = 0.01 * (NaturalResources / MaxResourceCapacity)
+
+    calc EnvironmentalQuality = (NaturalResources / MaxResourceCapacity + Biodiversity / 100) / 2
+
+    map EfficiencyResponse: spline
+        (0.0, 0.6)
+        (0.5, 0.8)
+        (1.0, 1.0)
+
+    calc ResourceEfficiency = EfficiencyResponse(EnvironmentalQuality)
+
+    flow ResourceUse:
+        ResourceExtraction --> NaturalResources
+
+    flow ResourceRegeneration:
+        ResourceRegenerationPotential -+> NaturalResources
+
+    flow BiodiversityLoss:
+        Biodiversity * BiodiversityLossRate * BiodiversityLossMultiplier --> Biodiversity
+
+    flow BiodiversityRecovery:
+        Biodiversity * BiodiversityRecoveryRate -+> Biodiversity
+
+# Stocks shouldn't go negative; clamp post-step to be safe.
+limit Environment.NaturalResources min = 0
+limit Environment.Biodiversity min = 0
+limit Economy.Pollution min = 0
+
+scenario GreenEconomy:
+    constant Economy.InvestmentFraction = 0.25
+    constant Economy.PollutionPerOutput = 0.05
+    constant Economy.TechnologyGrowthRate = 0.015
+
+scenario ResourceDepletion:
+    stock Environment.NaturalResources = 500
+    constant Environment.ResourceRegenerationRate = 0.005
+    constant Economy.PollutionPerOutput = 0.15
+
+scenario RapidPopulationGrowth:
+    constant Population.BirthRate = 0.04
+    constant Population.DeathRate = 0.008
