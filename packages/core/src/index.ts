@@ -70,6 +70,7 @@ export type {
 
 // Semantic
 export type { Symbol, SymbolKind, SymbolTable } from './semantic/symbols.js';
+export { findLoops, type Loop } from './semantic/loops.js';
 
 // IR
 export type {
@@ -78,6 +79,7 @@ export type {
   Op,
   Polarity,
   Influence,
+  FlowInput,
   TimeConfig,
   MapData,
   FlowEffectIR,

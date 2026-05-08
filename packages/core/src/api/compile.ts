@@ -28,7 +28,7 @@ import {
   topoSort,
 } from '../semantic/deps.js';
 import { desugar } from '../semantic/desugar.js';
-import { inferPolarities, type Polarity } from '../semantic/polarity.js';
+import { inferPolarities, signOfConstantExpr, type Polarity } from '../semantic/polarity.js';
 import { resolve } from '../semantic/resolver.js';
 import type { Symbol, SymbolTable } from '../semantic/symbols.js';
 import type {
@@ -54,6 +54,7 @@ import type {
   CompiledExpr,
   CompiledProgram,
   FlowEffectIR,
+  FlowInput,
   Influence,
   LimitIR,
   MapData,
@@ -130,12 +131,21 @@ export function compile(ast: Program): CompileResult {
     expr: lower(stmt.expr),
   }));
 
-  const stocks: StockIR[] = buckets.stocks.map(({ stmt, symbol }) => ({
-    slot: slots.stockSlot.get(symbol.id)!,
-    fqn: symbol.fqn,
-    init: lower(stmt.init),
-    synthetic: stmt.synthetic ?? false,
-  }));
+  const stocks: StockIR[] = buckets.stocks.map(({ stmt, symbol }) => {
+    const base = {
+      slot: slots.stockSlot.get(symbol.id)!,
+      fqn: symbol.fqn,
+      init: lower(stmt.init),
+      synthetic: stmt.synthetic ?? false,
+    };
+    if (!stmt.delayKind) return base;
+    // Recover the input source(s) from the synthetic stock's init expression
+    // — desugaring sets init = the original input expression, so its referenced
+    // symbols are exactly what feed the delay.
+    const inputSyms = new Set<number>();
+    collectExprSymbols(stmt.init, r.resolvedRefs, inputSyms);
+    return { ...base, delayKind: stmt.delayKind, delayInputs: [...inputSyms] };
+  });
 
   // Calcs in topo order so the runtime can evaluate them sequentially.
   const calcsByTopo = topoOrder
@@ -240,8 +250,8 @@ export function compile(ast: Program): CompileResult {
     if (sym) plotTargets.push(sym.fqn);
   }
 
-  // ─── 8. Polarity → influences ──────────────────────────────────────────
-  const influences = buildInfluences(buckets, r);
+  // ─── 8. Polarity → influences + flow inputs ────────────────────────────
+  const { influences, flowInputs } = buildInfluences(buckets, r);
 
   // ─── 9. Assemble ───────────────────────────────────────────────────────
   const program: CompiledProgram = {
@@ -258,6 +268,7 @@ export function compile(ast: Program): CompileResult {
     limits,
     plotTargets,
     influences,
+    flowInputs,
     diagnostics,
     stockCount: stocks.length,
     constantCount: constants.length,
@@ -408,30 +419,94 @@ function resolveTarget(
   return resolvedRefs.get(qref);
 }
 
-function buildInfluences(buckets: Buckets, r: ReturnType<typeof resolve>): Influence[] {
+function buildInfluences(
+  buckets: Buckets,
+  r: ReturnType<typeof resolve>,
+): { influences: Influence[]; flowInputs: FlowInput[] } {
   const influences: Influence[] = [];
+  const flowInputs: FlowInput[] = [];
+
+  // Pre-fold constant signs: walk each constant's defining expression in the
+  // order constants were declared (constants can only depend on prior
+  // constants). The resulting map lets polarity inference resolve, e.g.,
+  // `Stock * RateConstant` to `+/+` instead of `?/?`.
+  const constantSigns = new Map<number, Polarity>();
+  for (const { stmt, symbol } of buckets.constants) {
+    const sign = signOfConstantExpr(stmt.expr, r.resolvedRefs, constantSigns);
+    if (sign !== null) constantSigns.set(symbol.id, sign);
+  }
 
   for (const { stmt, symbol } of buckets.calcs) {
-    const polarities = inferPolarities(stmt.expr, r.resolvedRefs);
+    const polarities = inferPolarities(stmt.expr, r.resolvedRefs, constantSigns);
     for (const [sourceId, polarity] of polarities) {
       influences.push({ source: sourceId, target: symbol.id, polarity });
     }
   }
 
-  for (const { stmt: flow } of buckets.flows) {
+  // Per-flow merged source polarities. A flow may have multiple effects with
+  // different rate expressions; we union sources and merge polarities (a
+  // conflict between + and − across effects degrades to ?).
+  const flowMerged = new Map<number, Map<number, Polarity>>();
+
+  for (const { stmt: flow, symbol: flowSym } of buckets.flows) {
     for (const eff of flow.effects) {
       const targetSym = resolveTarget(r.resolvedRefs, eff.target);
       if (!targetSym) continue;
-      const polarities = inferPolarities(eff.expr, r.resolvedRefs);
+      const polarities = inferPolarities(eff.expr, r.resolvedRefs, constantSigns);
       for (const [sourceId, polarity] of polarities) {
         const final: Polarity =
           eff.polarity === 'positive' ? polarity : flipPolarity(polarity);
         influences.push({ source: sourceId, target: targetSym.id, polarity: final });
+
+        let perFlow = flowMerged.get(flowSym.id);
+        if (!perFlow) {
+          perFlow = new Map();
+          flowMerged.set(flowSym.id, perFlow);
+        }
+        const prev = perFlow.get(sourceId);
+        perFlow.set(sourceId, prev === undefined ? polarity : mergePolarity(prev, polarity));
       }
     }
   }
 
-  return influences;
+  for (const [flowId, perFlow] of flowMerged) {
+    for (const [sourceId, polarity] of perFlow) {
+      flowInputs.push({ flow: flowId, source: sourceId, polarity });
+    }
+  }
+
+  return { influences, flowInputs };
+}
+
+function mergePolarity(a: Polarity, b: Polarity): Polarity {
+  if (a === b) return a;
+  return '?';
+}
+
+function collectExprSymbols(
+  expr: Expr,
+  resolvedRefs: ReadonlyMap<object, Symbol>,
+  out: Set<number>,
+): void {
+  switch (expr.kind) {
+    case 'NumberLit':
+      return;
+    case 'Ref': {
+      const sym = resolvedRefs.get(expr);
+      if (sym && sym.kind !== 'builtin' && sym.kind !== 'map') out.add(sym.id);
+      return;
+    }
+    case 'Unary':
+      collectExprSymbols(expr.operand, resolvedRefs, out);
+      return;
+    case 'Binary':
+      collectExprSymbols(expr.left, resolvedRefs, out);
+      collectExprSymbols(expr.right, resolvedRefs, out);
+      return;
+    case 'Call':
+      for (const a of expr.args) collectExprSymbols(a, resolvedRefs, out);
+      return;
+  }
 }
 
 function flipPolarity(p: Polarity): Polarity {

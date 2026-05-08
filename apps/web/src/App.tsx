@@ -16,6 +16,7 @@ import { Diagnostics } from './components/Diagnostics.tsx';
 import { TerminalTable } from './components/TerminalTable.tsx';
 import { Header } from './components/Header.tsx';
 import { Diagram } from './components/Diagram.tsx';
+import { Loops } from './components/Loops.tsx';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
@@ -358,7 +359,12 @@ export function App() {
                   <h3 className="card__title-text">Stock-and-flow diagram</h3>
                   <span className="card__title-sub">{active.title}</span>
                 </div>
-                <Diagram program={sim.program} />
+                <div className="model-layout">
+                  <div className="model-layout__diagram">
+                    <Diagram program={sim.program} />
+                  </div>
+                  <Loops program={sim.program} />
+                </div>
               </div>
             )}
 

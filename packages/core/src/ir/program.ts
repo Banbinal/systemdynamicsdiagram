@@ -19,6 +19,18 @@ export interface Influence {
   readonly polarity: Polarity;
 }
 
+/**
+ * SFD-style information link: a source symbol (stock, calc, constant) feeding
+ * a flow's rate expression, with the polarity of that source on the rate
+ * (pre-flip — independent of whether the flow adds to or subtracts from the
+ * affected stock). Used by the diagram renderer to draw `source → flow` arcs.
+ */
+export interface FlowInput {
+  readonly flow: number; // Symbol.id of the flow
+  readonly source: number; // Symbol.id of the source
+  readonly polarity: Polarity; // raw polarity on the flow rate
+}
+
 export type { Op } from './op.js';
 import type { Op as _Op } from './op.js';
 
@@ -66,6 +78,15 @@ export interface StockIR {
   readonly init: CompiledExpr;
   /** True if this stock was synthesized from `smooth`/`delay3` desugaring. */
   readonly synthetic: boolean;
+  /** When this stock was synthesized for `smooth(...)` or `delay3(...)`. */
+  readonly delayKind?: 'smooth' | 'delay3';
+  /**
+   * Symbol ids of the original input source(s) — recovered by walking the
+   * synthetic stock's init expression. Used by the renderer to substitute
+   * `synthetic → consumer` arcs with `input → consumer` arcs marked as
+   * delayed. Empty for non-delay stocks.
+   */
+  readonly delayInputs?: readonly number[];
 }
 
 export interface ScenarioIR {
@@ -107,6 +128,7 @@ export interface CompiledProgram {
   readonly limits: readonly LimitIR[];
   readonly plotTargets: readonly string[]; // FQNs
   readonly influences: readonly Influence[];
+  readonly flowInputs: readonly FlowInput[];
   readonly diagnostics: readonly Diagnostic[];
   /** Total number of stock slots (including synthetic stocks from desugaring). */
   readonly stockCount: number;

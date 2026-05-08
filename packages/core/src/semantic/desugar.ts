@@ -132,7 +132,7 @@ export function desugar(ast: Program): DesugarResult {
       const [input, tau] = args;
       const stockName = fresh('smooth');
       // stock __smooth_N = input
-      pending.push(mkStock(stockName, input!, e.range));
+      pending.push(mkStock(stockName, input!, e.range, 'smooth'));
       // flow __smooth_N_flow:  (input - __smooth_N) / tau -+> __smooth_N
       const flowExpr = mkBin(
         '/',
@@ -159,9 +159,9 @@ export function desugar(ast: Program): DesugarResult {
       // an expression that varies.
       const mkTau3 = (): Expr => mkBin('/', tau!, mkNum(3, e.range), e.range);
 
-      pending.push(mkStock(a, input!, e.range));
-      pending.push(mkStock(b, input!, e.range));
-      pending.push(mkStock(c, input!, e.range));
+      pending.push(mkStock(a, input!, e.range, 'delay3'));
+      pending.push(mkStock(b, input!, e.range, 'delay3'));
+      pending.push(mkStock(c, input!, e.range, 'delay3'));
 
       // flow a:  (input - a) / (tau/3) -+> a
       pending.push(mkFlow(`${a}_flow`, [
@@ -265,8 +265,15 @@ function mkBin(op: BinaryOp, left: Expr, right: Expr, range: SourceRange): Binar
   return { kind: 'Binary', op, left, right, range };
 }
 
-function mkStock(name: string, init: Expr, range: SourceRange): StockStmt {
-  return { kind: 'Stock', name, init, range, synthetic: true };
+function mkStock(
+  name: string,
+  init: Expr,
+  range: SourceRange,
+  delayKind?: 'smooth' | 'delay3',
+): StockStmt {
+  return delayKind
+    ? { kind: 'Stock', name, init, range, synthetic: true, delayKind }
+    : { kind: 'Stock', name, init, range, synthetic: true };
 }
 
 function mkFlow(name: string, effects: FlowEffect[], range: SourceRange): FlowStmt {

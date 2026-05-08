@@ -56,6 +56,12 @@ export interface StockStmt extends NodeBase {
   readonly init: Expr;
   /** True if this stock was synthesized by the desugar pass (smooth/delay3). */
   readonly synthetic?: boolean;
+  /**
+   * Set by desugaring on synthetic stocks that implement an information
+   * delay. The renderer uses this to replace edges into the synthetic stock
+   * with delay-marked edges from the original input source(s).
+   */
+  readonly delayKind?: 'smooth' | 'delay3';
 }
 
 export interface CalcStmt extends NodeBase {
