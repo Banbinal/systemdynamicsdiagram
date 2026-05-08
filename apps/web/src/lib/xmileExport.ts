@@ -238,6 +238,10 @@ function stringifyExpr(e: Expr): string {
     }
     case 'Call':
       return `${e.callee}(${e.args.map(stringifyExpr).join(', ')})`;
+    case 'ArrayLit':
+      // XMILE has no native vector literal; the subscript pass should have
+      // expanded it. If we ever see one here, surface it as a comment.
+      return `/* unsupported: array literal [${e.values.join(', ')}] */ 0`;
   }
 }
 

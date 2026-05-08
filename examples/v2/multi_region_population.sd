@@ -1,0 +1,47 @@
+# Multi-region population — demonstrates subscripts.
+#
+# Four regions, each with its own population stock and birth/death rates.
+# Without subscripts you'd write 4 stocks + 4 birth flows + 4 death flows
+# manually — 12 statements. With subscripts: 1 stock decl + 2 flow decls,
+# all expanded by the compiler into the same 12 underlying variables.
+#
+# Try changing the array literals or the subscript element list — the
+# expansion adapts automatically.
+
+title Multi-Region Population
+
+StartTime = 0
+EndTime = 60
+TimeStep = 0.5
+
+# Declare the subscript (the dimension and its elements).
+subscript Region = North, South, East, West
+
+# Per-region rates via array literals — order matches the subscript order.
+constant BirthRate[Region] = [0.06, 0.04, 0.05, 0.03]
+constant DeathRate[Region] = [0.02, 0.03, 0.025, 0.04]
+
+# Stock declared once, expanded into Population_North … Population_West.
+stock Population[Region] = 100
+
+# Flows declared once, expanded into Births_North … Births_West.
+flow Births[Region]:
+    Population[Region] * BirthRate[Region] -+> Population[Region]
+
+flow Deaths[Region]:
+    Population[Region] * DeathRate[Region] --> Population[Region]
+
+# Aggregate calc — uses literal-element refs in a scalar context.
+calc TotalPopulation = Population[North] + Population[South] + Population[East] + Population[West]
+
+# Plot a few of the expanded variants.
+plot Population[North]
+plot Population[South]
+plot TotalPopulation
+
+# Reality check: every region's population must stay non-negative.
+check Population_nonneg_North:
+    then Population[North] >= 0 always
+
+check Population_nonneg_South:
+    then Population[South] >= 0 always

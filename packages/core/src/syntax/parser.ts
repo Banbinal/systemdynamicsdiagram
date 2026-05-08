@@ -43,10 +43,12 @@ import type {
   Program,
   QualifiedRef,
   RefExpr,
+  ArrayLit,
   CalibrateStmt,
   CalibrationParam,
   ReferencePoint,
   ReferenceStmt,
+  SubscriptStmt,
   ScenarioOverride,
   ScenarioStmt,
   Stmt,
@@ -153,6 +155,7 @@ class Parser {
       case TokenKind.KwCheck: return this.parseCheck();
       case TokenKind.KwReference: return this.parseReference();
       case TokenKind.KwCalibrate: return this.parseCalibrate();
+      case TokenKind.KwSubscript: return this.parseSubscriptDecl();
       default: {
         this.diag('error', 'SD0020', `Unexpected token '${tok.text}' at top level.`, tok.range);
         this.recoverToNewline();
@@ -217,6 +220,7 @@ class Parser {
       this.recoverToNewline();
       return null;
     }
+    const subscript = this.maybeSubscriptBracket();
     if (!this.expect(TokenKind.Eq)) {
       this.recoverToNewline();
       return null;
@@ -227,20 +231,57 @@ class Parser {
       return null;
     }
     this.consumeNewline();
-    return exogenous
-      ? {
-          kind: 'Constant',
-          name: name.text,
-          expr,
-          exogenous: true,
-          range: { start: kw.range.start, end: expr.range.end },
-        }
-      : {
-          kind: 'Constant',
-          name: name.text,
-          expr,
-          range: { start: kw.range.start, end: expr.range.end },
-        };
+    const base = {
+      kind: 'Constant' as const,
+      name: name.text,
+      expr,
+      range: { start: kw.range.start, end: expr.range.end },
+    };
+    return {
+      ...base,
+      ...(exogenous ? { exogenous: true } : {}),
+      ...(subscript ? { subscript } : {}),
+    };
+  }
+
+  /** Parse `[Ident]` after a declaration name or qualified ref. Returns null if
+   *  there's no bracket; consumes both brackets when there is. */
+  private maybeSubscriptBracket(): string | null {
+    if (this.peek().kind !== TokenKind.LBracket) return null;
+    this.advance();
+    const id = this.expect(TokenKind.Ident);
+    if (!id) return null;
+    if (!this.expect(TokenKind.RBracket)) return null;
+    return id.text;
+  }
+
+  private parseSubscriptDecl(): SubscriptStmt | null {
+    const kw = this.advance(); // 'subscript'
+    const name = this.expect(TokenKind.Ident);
+    if (!name) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
+    const elements: string[] = [];
+    const first = this.expect(TokenKind.Ident);
+    if (!first) { this.recoverToNewline(); return null; }
+    elements.push(first.text);
+    let last = first;
+    while (this.peek().kind === TokenKind.Comma) {
+      this.advance();
+      const next = this.expect(TokenKind.Ident);
+      if (!next) { this.recoverToNewline(); return null; }
+      elements.push(next.text);
+      last = next;
+    }
+    if (elements.length < 2) {
+      this.diag('error', 'SD0047', `Subscript '${name.text}' must list at least two elements.`, kw.range);
+    }
+    this.consumeNewline();
+    return {
+      kind: 'Subscript',
+      name: name.text,
+      elements,
+      range: { start: kw.range.start, end: last.range.end },
+    };
   }
 
   /** `exogenous constant <Name> = <expr>` — boundary-marker prefix. */
@@ -263,6 +304,7 @@ class Parser {
     const kw = this.advance();
     const name = this.expect(TokenKind.Ident);
     if (!name) { this.recoverToNewline(); return null; }
+    const subscript = this.maybeSubscriptBracket();
     if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
     const init = this.parseExpression();
     if (!init) { this.recoverToNewline(); return null; }
@@ -272,6 +314,7 @@ class Parser {
       name: name.text,
       init,
       range: { start: kw.range.start, end: init.range.end },
+      ...(subscript ? { subscript } : {}),
     };
   }
 
@@ -279,6 +322,7 @@ class Parser {
     const kw = this.advance();
     const name = this.expect(TokenKind.Ident);
     if (!name) { this.recoverToNewline(); return null; }
+    const subscript = this.maybeSubscriptBracket();
     if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
     const expr = this.parseExpression();
     if (!expr) { this.recoverToNewline(); return null; }
@@ -288,6 +332,7 @@ class Parser {
       name: name.text,
       expr,
       range: { start: kw.range.start, end: expr.range.end },
+      ...(subscript ? { subscript } : {}),
     };
   }
 
@@ -400,6 +445,7 @@ class Parser {
     const kw = this.advance();
     const name = this.expect(TokenKind.Ident);
     if (!name) { this.recoverToNewline(); return null; }
+    const subscript = this.maybeSubscriptBracket();
     if (!this.expect(TokenKind.Colon)) { this.recoverToNewline(); return null; }
     if (!this.consumeNewline()) { return null; }
     if (!this.expect(TokenKind.Indent)) { this.recoverToDedent(); return null; }
@@ -419,6 +465,7 @@ class Parser {
       name: name.text,
       effects,
       range: { start: kw.range.start, end: close?.range.end ?? this.previous().range.end },
+      ...(subscript ? { subscript } : {}),
     };
   }
 
@@ -876,8 +923,21 @@ class Parser {
       path.push(next.text);
       last = next;
     }
+    // Optional subscript bracket: `Foo[Sub]` or `Foo[North]`. The desugar
+    // pass binds `Sub` to the current expansion's element when applicable.
+    let subscript: string | undefined;
+    if (this.peek().kind === TokenKind.LBracket) {
+      this.advance();
+      const id = this.expect(TokenKind.Ident);
+      if (!id) return null;
+      const close = this.expect(TokenKind.RBracket);
+      if (!close) return null;
+      subscript = id.text;
+      last = close;
+    }
     return {
       path,
+      ...(subscript ? { subscript } : {}),
       range: { start: first.range.start, end: last.range.end },
     };
   }
@@ -1005,9 +1065,48 @@ class Parser {
         path.push(next.text);
         last = next;
       }
+      // Optional subscript bracket: `Foo[Sub]` / `Foo[North]`.
+      let subscript: string | undefined;
+      if (this.peek().kind === TokenKind.LBracket) {
+        this.advance();
+        const id = this.expect(TokenKind.Ident);
+        if (!id) return null;
+        const close = this.expect(TokenKind.RBracket);
+        if (!close) return null;
+        subscript = id.text;
+        last = close;
+      }
       const node: RefExpr = {
         kind: 'Ref',
         path,
+        ...(subscript ? { subscript } : {}),
+        range: { start: tok.range.start, end: last.range.end },
+      };
+      return node;
+    }
+
+    // Numeric array literal: `[v1, v2, …]`. Only meaningful as the RHS of a
+    // subscripted constant, but we accept it everywhere and validate later.
+    if (tok.kind === TokenKind.LBracket) {
+      this.advance();
+      const values: number[] = [];
+      let last: Token = tok;
+      if (this.peek().kind !== TokenKind.RBracket) {
+        const first = this.maybeSignedNumber();
+        if (!first) return null;
+        values.push(first.value);
+        while (this.consume(TokenKind.Comma)) {
+          const n = this.maybeSignedNumber();
+          if (!n) return null;
+          values.push(n.value);
+        }
+      }
+      const close = this.expect(TokenKind.RBracket);
+      if (!close) return null;
+      last = close;
+      const node: ArrayLit = {
+        kind: 'ArrayLit',
+        values,
         range: { start: tok.range.start, end: last.range.end },
       };
       return node;

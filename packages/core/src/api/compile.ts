@@ -28,6 +28,7 @@ import {
   topoSort,
 } from '../semantic/deps.js';
 import { desugar } from '../semantic/desugar.js';
+import { expandSubscripts } from '../semantic/subscripts.js';
 import { inferPolarities, signOfConstantExpr, type Polarity } from '../semantic/polarity.js';
 import { resolve } from '../semantic/resolver.js';
 import type { Symbol, SymbolTable } from '../semantic/symbols.js';
@@ -80,10 +81,12 @@ const DEFAULT_TIME = { startTime: 0, endTime: 10, timeStep: 1 };
 
 /** Compile an AST into a simulation-ready `CompiledProgram`. */
 export function compile(ast: Program): CompileResult {
-  // ─── 0. Desugar smooth/delay3/step/pulse ───────────────────────────────
+  // ─── 0a. Expand subscripts (per-element fan-out before any other pass) ──
+  const subExpansion = expandSubscripts(ast);
+  // ─── 0b. Desugar smooth/delay3/step/pulse ──────────────────────────────
   // Runs before resolve so the rewritten AST is resolved fresh in one shot.
-  const ds = desugar(ast);
-  const diagnostics: Diagnostic[] = [...ds.diagnostics];
+  const ds = desugar(subExpansion.program);
+  const diagnostics: Diagnostic[] = [...subExpansion.diagnostics, ...ds.diagnostics];
 
   // ─── 1. Resolve ─────────────────────────────────────────────────────────
   const r = resolve(ds.program);

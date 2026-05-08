@@ -18,6 +18,7 @@ import archetypeShiftingBurden from '../../../examples/v2/archetype_shifting_bur
 import archetypeTragedyCommons from '../../../examples/v2/archetype_tragedy_commons.sd?raw';
 import archetypeFixesThatFail from '../../../examples/v2/archetype_fixes_that_fail.sd?raw';
 import archetypeDriftingGoals from '../../../examples/v2/archetype_drifting_goals.sd?raw';
+import multiRegionPopulation from '../../../examples/v2/multi_region_population.sd?raw';
 
 export interface Example {
   readonly id: string;
@@ -41,6 +42,7 @@ export const EXAMPLES: readonly Example[] = [
   { id: 'arch_tragedy_commons', slug: 'arch-tragedy-of-commons', title: 'Archetype · Tragedy of Commons',   source: archetypeTragedyCommons },
   { id: 'arch_fixes_that_fail', slug: 'arch-fixes-that-fail',    title: 'Archetype · Fixes that Fail',      source: archetypeFixesThatFail },
   { id: 'arch_drifting_goals',  slug: 'arch-drifting-goals',     title: 'Archetype · Drifting Goals',       source: archetypeDriftingGoals },
+  { id: 'multi_region',         slug: 'multi-region',             title: 'Multi-Region Population (subscripts)', source: multiRegionPopulation },
 ];
 
 export const DEFAULT_EXAMPLE = EXAMPLES[0]!;

@@ -69,6 +69,7 @@ export function desugar(ast: Program): DesugarResult {
       switch (e.kind) {
         case 'NumberLit':
         case 'Ref':
+        case 'ArrayLit':
           return e;
         case 'Unary':
           return { ...e, operand: rewriteExpr(e.operand) };

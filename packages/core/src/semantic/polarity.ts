@@ -110,6 +110,9 @@ export function signOfConstantExpr(
       // Builtins can be sign-preserving (sqrt, exp, abs) but signs of complex
       // calls are out of scope for this static fold.
       return null;
+    case 'ArrayLit':
+      // Should have been expanded to a NumberLit by the subscript pass.
+      return null;
   }
 }
 

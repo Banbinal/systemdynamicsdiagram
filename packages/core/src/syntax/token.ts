@@ -77,6 +77,10 @@ export const enum TokenKind {
   // against the model's reference modes via Nelder-Mead.
   KwCalibrate = 'KW_CALIBRATE',
   KwBounds = 'KW_BOUNDS',
+  // Subscripts — `subscript Region = North, South, East, West` declares a
+  // 1D dimension; declarations with `[Sub]` get expanded per-element by
+  // the desugar pass.
+  KwSubscript = 'KW_SUBSCRIPT',
   // Time configuration words. Treated as keywords because they introduce
   // statements (e.g. `StartTime = 0`) and must not collide with user identifiers.
   KwStartTime = 'KW_START_TIME',
@@ -114,6 +118,7 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ['reference', TokenKind.KwReference],
   ['calibrate', TokenKind.KwCalibrate],
   ['bounds', TokenKind.KwBounds],
+  ['subscript', TokenKind.KwSubscript],
 ]);
 
 export interface Token {

@@ -110,6 +110,19 @@ function walk(
 
     case 'Call':
       return emitCall(e, ctx, ops, diags);
+
+    case 'ArrayLit':
+      // ArrayLit is only legal as the RHS of a subscripted constant; the
+      // subscript expansion pass should have replaced it with NumberLits per
+      // element. Reaching this branch means it was used out of context —
+      // emit a zero so codegen stays consistent and surface a diagnostic.
+      diags.push({
+        severity: 'error',
+        code: 'SD0065',
+        message: 'Array literal is only valid as the initial value of a subscripted constant.',
+        range: e.range,
+      });
+      return pushZero(ops);
   }
 }
 

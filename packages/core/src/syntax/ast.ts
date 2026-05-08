@@ -28,7 +28,8 @@ export type Stmt =
   | LimitStmt
   | CheckStmt
   | ReferenceStmt
-  | CalibrateStmt;
+  | CalibrateStmt
+  | SubscriptStmt;
 
 export interface NodeBase {
   readonly range: SourceRange;
@@ -58,6 +59,8 @@ export interface ConstantStmt extends NodeBase {
    * exogenous constants with a dashed border + "exo" badge.
    */
   readonly exogenous?: boolean;
+  /** Subscript dimension name when declared `constant X[Sub] = ...`. */
+  readonly subscript?: string;
 }
 
 export interface StockStmt extends NodeBase {
@@ -72,12 +75,16 @@ export interface StockStmt extends NodeBase {
    * with delay-marked edges from the original input source(s).
    */
   readonly delayKind?: 'smooth' | 'delay3';
+  /** Subscript dimension name when declared `stock X[Sub] = ...`. */
+  readonly subscript?: string;
 }
 
 export interface CalcStmt extends NodeBase {
   readonly kind: 'Calc';
   readonly name: string;
   readonly expr: Expr;
+  /** Subscript dimension name when declared `calc X[Sub] = ...`. */
+  readonly subscript?: string;
 }
 
 export type FlowPolarity = 'positive' | 'negative';
@@ -92,6 +99,8 @@ export interface FlowStmt extends NodeBase {
   readonly kind: 'Flow';
   readonly name: string;
   readonly effects: readonly FlowEffect[];
+  /** Subscript dimension name when declared `flow X[Sub]: ...`. */
+  readonly subscript?: string;
 }
 
 export type MapInterpolation = 'linear' | 'step' | 'spline';
@@ -215,6 +224,17 @@ export interface CalibrateStmt extends NodeBase {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Subscripts — `subscript Region = North, South, East, West`. Phase 1 only
+// supports a single 1D dimension per declaration; the desugar pass expands
+// `Foo[Region]` into one variable per element, e.g. `Foo_North`, …
+
+export interface SubscriptStmt extends NodeBase {
+  readonly kind: 'Subscript';
+  readonly name: string;
+  readonly elements: readonly string[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Expression nodes
 
 export type Expr =
@@ -222,7 +242,8 @@ export type Expr =
   | RefExpr
   | BinaryExpr
   | UnaryExpr
-  | CallExpr;
+  | CallExpr
+  | ArrayLit;
 
 export interface NumberLit extends NodeBase {
   readonly kind: 'NumberLit';
@@ -232,11 +253,18 @@ export interface NumberLit extends NodeBase {
 /** A possibly-dotted name. The resolver fills `symbolId` post-resolution. */
 export interface QualifiedRef extends NodeBase {
   readonly path: readonly string[];
+  /**
+   * Optional subscript bracket: `Foo[Sub]` or `Foo[North]`. The desugar
+   * pass resolves it to either the current loop's element (when Sub is the
+   * containing decl's subscript name) or the named element directly.
+   */
+  readonly subscript?: string;
 }
 
 export interface RefExpr extends NodeBase {
   readonly kind: 'Ref';
   readonly path: readonly string[];
+  readonly subscript?: string;
 }
 
 export type BinaryOp =
@@ -263,6 +291,16 @@ export interface CallExpr extends NodeBase {
   readonly kind: 'Call';
   readonly callee: string;
   readonly args: readonly Expr[];
+}
+
+/**
+ * Numeric array literal: `[0.05, 0.04, 0.06, 0.03]`. Only legal as the RHS
+ * of a subscripted constant declaration; everywhere else the desugar pass
+ * raises an error.
+ */
+export interface ArrayLit extends NodeBase {
+  readonly kind: 'ArrayLit';
+  readonly values: readonly number[];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
