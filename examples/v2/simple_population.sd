@@ -25,5 +25,25 @@ flow Deaths:
 # Population should never go negative.
 limit Population min = 0
 
+# ── Reality Check assertions ──────────────────────────────────────────────
+# These run an isolated simulation with their `when` overrides applied,
+# then verify the assertion at every recorded step (`always`) or at a
+# specific time (`at t = N`). Surfaced in the "Checks" tab.
+
+# Stock invariant: with the limit above, Population can never go negative.
+check Population_nonneg:
+    then Population >= 0 always
+
+# With death rate cranked up and births off, the population must collapse
+# below half of its initial value within the simulation horizon.
+check Crash_when_births_off:
+    when BirthRate = 0
+    when DeathRate = 0.1
+    then Population <= 50 at t = 100
+
+# Below carrying capacity at all times in the default scenario.
+check Stays_below_capacity:
+    then Population <= CarryingCapacity always
+
 plot Population
 plot ActualBirthRate

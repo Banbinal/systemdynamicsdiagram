@@ -20,6 +20,7 @@ import { Header } from './components/Header.tsx';
 import { Diagram } from './components/Diagram.tsx';
 import { Loops } from './components/Loops.tsx';
 import { Tweak } from './components/Tweak.tsx';
+import { Checks } from './components/Checks.tsx';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
@@ -37,7 +38,7 @@ const SERIES_COLORS = [
   'var(--series-8)',
 ];
 
-type Tab = 'model' | 'simulation' | 'compare' | 'data';
+type Tab = 'model' | 'simulation' | 'compare' | 'data' | 'checks';
 type View = 'workbench' | 'docs';
 
 const SKILL_ZIP_HREF = `${import.meta.env.BASE_URL}system-dynamics-diagram.zip`;
@@ -410,6 +411,17 @@ export function App() {
                 <span className="tab__count">{sim.stockFqns.length}</span>
               )}
             </button>
+            {sim.program && sim.program.checks.length > 0 && (
+              <button
+                className="tab"
+                role="tab"
+                aria-selected={tab === 'checks'}
+                onClick={() => setTab('checks')}
+              >
+                Checks
+                <span className="tab__count">{sim.program.checks.length}</span>
+              </button>
+            )}
           </div>
 
           <div className="tab-content" role="tabpanel">
@@ -483,6 +495,18 @@ export function App() {
                 ) : (
                   <div className="placeholder">No simulation data.</div>
                 )}
+              </div>
+            )}
+
+            {tab === 'checks' && (
+              <div className="card">
+                <div className="card__title">
+                  <h3 className="card__title-text">Reality Check assertions</h3>
+                  <span className="card__title-sub">
+                    each check runs an isolated simulation with its `when` overrides
+                  </span>
+                </div>
+                <Checks program={sim.program} />
               </div>
             )}
           </div>

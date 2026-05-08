@@ -202,6 +202,16 @@ class Resolver {
         case 'Limit':
           this.resolveQualifiedTarget(stmt.target, ns);
           break;
+        case 'Check':
+          for (const inp of stmt.inputs) {
+            this.resolveExpr(inp.expr, ns);
+            // The `when` target must be a `constant` since check inputs override
+            // a single fixed value before the run.
+            this.resolveQualifiedTarget(inp.target, ns, 'constant');
+          }
+          this.resolveExpr(stmt.lhs, ns);
+          this.resolveExpr(stmt.rhs, ns);
+          break;
         case 'Map':
         case 'Title':
         case 'TimeConfig':

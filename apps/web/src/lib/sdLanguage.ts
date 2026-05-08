@@ -35,6 +35,11 @@ const CONFIG_KW = new Set([
   'limit',
   'min',
   'max',
+  'check',
+  'when',
+  'then',
+  'always',
+  'at',
 ]);
 const TIME_KW = new Set(['StartTime', 'EndTime', 'TimeStep']);
 const INTERP_KW = new Set(['linear', 'step', 'spline']);
@@ -143,7 +148,7 @@ export const sdLanguage = StreamLanguage.define<SDState>({
   },
   languageData: {
     commentTokens: { line: '#' },
-    indentOnInput: /^\s+(?:flow|module|scenario|sweep|map):$/,
+    indentOnInput: /^\s+(?:flow|module|scenario|sweep|map|check):$/,
   },
 });
 

@@ -25,7 +25,8 @@ export type Stmt =
   | ScenarioStmt
   | SweepStmt
   | PlotStmt
-  | LimitStmt;
+  | LimitStmt
+  | CheckStmt;
 
 export interface NodeBase {
   readonly range: SourceRange;
@@ -135,6 +136,40 @@ export interface LimitStmt extends NodeBase {
   readonly target: QualifiedRef;
   readonly min?: number;
   readonly max?: number;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Reality Check
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Operators allowed in a check assertion. Strict subset of the binary set. */
+export type CheckOp = '>=' | '<=' | '>' | '<' | '==' | '!=';
+
+/** A single `when <Const> = <expr>` clause: a fixed input override for the run. */
+export interface CheckInput extends NodeBase {
+  readonly target: QualifiedRef;
+  readonly expr: Expr;
+}
+
+/**
+ * Temporal qualifier on the assertion.
+ *   - `always`: must hold at every recorded step.
+ *   - `at`:     must hold at the recorded step closest to `t`.
+ */
+export type CheckTemporal =
+  | { readonly kind: 'always' }
+  | { readonly kind: 'at'; readonly t: number };
+
+export interface CheckStmt extends NodeBase {
+  readonly kind: 'Check';
+  readonly name: string;
+  readonly inputs: readonly CheckInput[];
+  /** The assertion's left-hand expression (`Population` in `Population >= 0`). */
+  readonly lhs: Expr;
+  readonly op: CheckOp;
+  /** The assertion's right-hand expression (`0` in `Population >= 0`). */
+  readonly rhs: Expr;
+  readonly temporal: CheckTemporal;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -24,6 +24,10 @@ import type {
   BinaryOp,
   CalcStmt,
   CallExpr,
+  CheckInput,
+  CheckOp,
+  CheckStmt,
+  CheckTemporal,
   ConstantStmt,
   Expr,
   FlowEffect,
@@ -141,6 +145,7 @@ class Parser {
       case TokenKind.KwSweep: return this.parseSweep();
       case TokenKind.KwPlot: return this.parsePlot();
       case TokenKind.KwLimit: return this.parseLimit();
+      case TokenKind.KwCheck: return this.parseCheck();
       default: {
         this.diag('error', 'SD0020', `Unexpected token '${tok.text}' at top level.`, tok.range);
         this.recoverToNewline();
@@ -538,6 +543,140 @@ class Parser {
       name: name.text,
       overrides,
       range: { start: kw.range.start, end: close?.range.end ?? this.previous().range.end },
+    };
+  }
+
+  private parseCheck(): CheckStmt | null {
+    const kw = this.advance();
+    const name = this.expect(TokenKind.Ident);
+    if (!name) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Colon)) { this.recoverToNewline(); return null; }
+    if (!this.consumeNewline()) return null;
+    if (!this.expect(TokenKind.Indent)) { this.recoverToDedent(); return null; }
+
+    const inputs: CheckInput[] = [];
+    let assertion: { lhs: Expr; op: CheckOp; rhs: Expr; temporal: CheckTemporal; range: SourceRange } | null = null;
+
+    while (this.peek().kind !== TokenKind.Dedent && !this.isAtEnd()) {
+      const t = this.peek();
+      if (t.kind === TokenKind.Newline) { this.advance(); continue; }
+      if (t.kind === TokenKind.KwWhen) {
+        const inp = this.parseCheckInput();
+        if (inp) inputs.push(inp);
+      } else if (t.kind === TokenKind.KwThen) {
+        const a = this.parseCheckAssertion();
+        if (a) {
+          if (assertion) {
+            this.diag('error', 'SD0034', `Check '${name.text}' has multiple 'then' clauses; only one is allowed.`, a.range);
+          } else {
+            assertion = a;
+          }
+        }
+      } else {
+        this.diag('error', 'SD0033', `Expected 'when' or 'then' inside check, got '${t.text}'.`, t.range);
+        this.recoverToNewline();
+      }
+    }
+    const close = this.expect(TokenKind.Dedent);
+
+    if (!assertion) {
+      this.diag('error', 'SD0035', `Check '${name.text}' must have exactly one 'then' clause.`, kw.range);
+      return null;
+    }
+
+    return {
+      kind: 'Check',
+      name: name.text,
+      inputs,
+      lhs: assertion.lhs,
+      op: assertion.op,
+      rhs: assertion.rhs,
+      temporal: assertion.temporal,
+      range: { start: kw.range.start, end: close?.range.end ?? this.previous().range.end },
+    };
+  }
+
+  private parseCheckInput(): CheckInput | null {
+    const kw = this.advance(); // 'when'
+    const target = this.parseQualifiedRef();
+    if (!target) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
+    const expr = this.parseExpression();
+    if (!expr) { this.recoverToNewline(); return null; }
+    this.consumeNewline();
+    return {
+      target,
+      expr,
+      range: { start: kw.range.start, end: expr.range.end },
+    };
+  }
+
+  private parseCheckAssertion(): {
+    lhs: Expr;
+    op: CheckOp;
+    rhs: Expr;
+    temporal: CheckTemporal;
+    range: SourceRange;
+  } | null {
+    const kw = this.advance(); // 'then'
+    // Use min-prec 4 to skip comparison operators — the assertion's own
+    // comparison operator is parsed explicitly below, not as part of `lhs`.
+    const lhs = this.parseExprBP(4);
+    if (!lhs) { this.recoverToNewline(); return null; }
+    const opTok = this.peek();
+    let op: CheckOp;
+    switch (opTok.kind) {
+      case TokenKind.GtEq: op = '>='; break;
+      case TokenKind.LtEq: op = '<='; break;
+      case TokenKind.Gt: op = '>'; break;
+      case TokenKind.Lt: op = '<'; break;
+      case TokenKind.EqEq: op = '=='; break;
+      case TokenKind.BangEq: op = '!='; break;
+      default:
+        this.diag('error', 'SD0036', `Expected comparison operator (>=, <=, >, <, ==, !=) in check assertion, got '${opTok.text}'.`, opTok.range);
+        this.recoverToNewline();
+        return null;
+    }
+    this.advance();
+    // Same trick: rhs must not consume comparison operators (none follow,
+    // but be consistent and bail at the temporal keyword).
+    const rhs = this.parseExprBP(4);
+    if (!rhs) { this.recoverToNewline(); return null; }
+
+    // Temporal qualifier: 'always' or 'at t = <num>'.
+    const tempTok = this.peek();
+    let temporal: CheckTemporal;
+    let endRange = rhs.range;
+    if (tempTok.kind === TokenKind.KwAlways) {
+      this.advance();
+      temporal = { kind: 'always' };
+      endRange = tempTok.range;
+    } else if (tempTok.kind === TokenKind.KwAt) {
+      this.advance();
+      // Optionally consume identifier 't' or '=' shape: `at t = <num>`.
+      // We accept either bare `at <num>` or `at t = <num>` for ergonomics.
+      let tValue: number | null = null;
+      if (this.peek().kind === TokenKind.Ident && this.peek().text === 't') {
+        this.advance();
+        if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
+      }
+      const num = this.maybeSignedNumber();
+      if (!num) { this.recoverToNewline(); return null; }
+      tValue = num.value;
+      temporal = { kind: 'at', t: tValue };
+      endRange = num.range;
+    } else {
+      this.diag('error', 'SD0037', `Expected temporal qualifier ('always' or 'at t = <num>') after assertion, got '${tempTok.text}'.`, tempTok.range);
+      this.recoverToNewline();
+      return null;
+    }
+    this.consumeNewline();
+    return {
+      lhs,
+      op,
+      rhs,
+      temporal,
+      range: { start: kw.range.start, end: endRange.end },
     };
   }
 

@@ -17,6 +17,14 @@ export {
   type SimulationResult,
   type VariationResult,
 } from './runtime/simulate.js';
+export {
+  runChecks,
+  type CheckRunOptions,
+  type CheckResult,
+  type CheckPass,
+  type CheckFail,
+  type CheckErr,
+} from './runtime/checks.js';
 
 // Diagnostics
 export {
@@ -88,6 +96,10 @@ export type {
   ScenarioIR,
   SweepIR,
   LimitIR,
+  CheckIR,
+  CheckInputIR,
+  CheckOp,
+  CheckTemporal,
 } from './ir/program.js';
 
 // Runtime

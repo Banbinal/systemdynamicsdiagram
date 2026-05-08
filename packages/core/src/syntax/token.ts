@@ -61,6 +61,12 @@ export const enum TokenKind {
   KwPlot = 'KW_PLOT',
   KwLimit = 'KW_LIMIT',
   KwTitle = 'KW_TITLE',
+  // Reality Check
+  KwCheck = 'KW_CHECK',
+  KwWhen = 'KW_WHEN',
+  KwThen = 'KW_THEN',
+  KwAlways = 'KW_ALWAYS',
+  KwAt = 'KW_AT',
   // Time configuration words. Treated as keywords because they introduce
   // statements (e.g. `StartTime = 0`) and must not collide with user identifiers.
   KwStartTime = 'KW_START_TIME',
@@ -89,6 +95,11 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ['StartTime', TokenKind.KwStartTime],
   ['EndTime', TokenKind.KwEndTime],
   ['TimeStep', TokenKind.KwTimeStep],
+  ['check', TokenKind.KwCheck],
+  ['when', TokenKind.KwWhen],
+  ['then', TokenKind.KwThen],
+  ['always', TokenKind.KwAlways],
+  ['at', TokenKind.KwAt],
 ]);
 
 export interface Token {

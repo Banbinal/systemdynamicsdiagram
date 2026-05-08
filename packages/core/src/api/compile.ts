@@ -33,6 +33,7 @@ import { resolve } from '../semantic/resolver.js';
 import type { Symbol, SymbolTable } from '../semantic/symbols.js';
 import type {
   CalcStmt,
+  CheckStmt,
   ConstantStmt,
   Expr,
   FlowStmt,
@@ -51,6 +52,8 @@ import { lowerExpr, type SlotIndex } from '../ir/lower.js';
 import { precomputeSpline } from '../ir/interp.js';
 import type {
   CalcIR,
+  CheckIR,
+  CheckInputIR,
   CompiledExpr,
   CompiledProgram,
   FlowEffectIR,
@@ -253,7 +256,26 @@ export function compile(ast: Program): CompileResult {
   // ─── 8. Polarity → influences + flow inputs ────────────────────────────
   const { influences, flowInputs } = buildInfluences(buckets, r);
 
-  // ─── 9. Assemble ───────────────────────────────────────────────────────
+  // ─── 9. Reality Check assertions ──────────────────────────────────────
+  const checks: CheckIR[] = [];
+  for (const c of buckets.checks) {
+    const inputs: CheckInputIR[] = [];
+    for (const inp of c.inputs) {
+      const sym = resolveTarget(r.resolvedRefs, inp.target);
+      if (!sym || sym.kind !== 'constant') continue;
+      inputs.push({ fqn: sym.fqn, expr: lower(inp.expr) });
+    }
+    checks.push({
+      name: c.name,
+      inputs,
+      lhs: lower(c.lhs),
+      op: c.op,
+      rhs: lower(c.rhs),
+      temporal: c.temporal,
+    });
+  }
+
+  // ─── 10. Assemble ──────────────────────────────────────────────────────
   const program: CompiledProgram = {
     title,
     time,
@@ -269,6 +291,7 @@ export function compile(ast: Program): CompileResult {
     plotTargets,
     influences,
     flowInputs,
+    checks,
     diagnostics,
     stockCount: stocks.length,
     constantCount: constants.length,
@@ -293,6 +316,7 @@ interface Buckets {
   readonly sweeps: SweepStmt[];
   readonly plots: PlotStmt[];
   readonly limits: LimitStmt[];
+  readonly checks: CheckStmt[];
   readonly constantsBySymId: Map<number, { stmt: ConstantStmt; symbol: Symbol }>;
   readonly calcsBySymId: Map<number, { stmt: CalcStmt; symbol: Symbol }>;
 }
@@ -310,6 +334,7 @@ function collectStmts(ast: Program): Buckets {
     sweeps: [],
     plots: [],
     limits: [],
+    checks: [],
     constantsBySymId: new Map(),
     calcsBySymId: new Map(),
   };
@@ -334,6 +359,7 @@ function walk(stmts: readonly Stmt[], b: Buckets): void {
       case 'Sweep': b.sweeps.push(s); break;
       case 'Plot': b.plots.push(s); break;
       case 'Limit': b.limits.push(s); break;
+      case 'Check': b.checks.push(s); break;
     }
   }
 }

@@ -108,6 +108,30 @@ export interface LimitIR {
   readonly max?: number;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Reality Check IR
+
+export type CheckOp = '>=' | '<=' | '>' | '<' | '==' | '!=';
+export type CheckTemporal =
+  | { readonly kind: 'always' }
+  | { readonly kind: 'at'; readonly t: number };
+
+export interface CheckInputIR {
+  /** Constant FQN being overridden for this check's run. */
+  readonly fqn: string;
+  /** Compiled override expression. Evaluated against base constants only. */
+  readonly expr: CompiledExpr;
+}
+
+export interface CheckIR {
+  readonly name: string;
+  readonly inputs: readonly CheckInputIR[];
+  readonly lhs: CompiledExpr;
+  readonly op: CheckOp;
+  readonly rhs: CompiledExpr;
+  readonly temporal: CheckTemporal;
+}
+
 /**
  * The result of `compile(ast)`: ready for `simulate(program)`.
  *
@@ -129,6 +153,7 @@ export interface CompiledProgram {
   readonly plotTargets: readonly string[]; // FQNs
   readonly influences: readonly Influence[];
   readonly flowInputs: readonly FlowInput[];
+  readonly checks: readonly CheckIR[];
   readonly diagnostics: readonly Diagnostic[];
   /** Total number of stock slots (including synthetic stocks from desugaring). */
   readonly stockCount: number;
