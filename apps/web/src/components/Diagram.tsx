@@ -23,6 +23,7 @@ import {
 } from '../lib/programToReactFlow.ts';
 import { EDGE_TYPES } from './diagram/edges.tsx';
 import { NODE_TYPES } from './diagram/nodes.tsx';
+import { CausalLens } from './CausalLens.tsx';
 
 interface DiagramProps {
   readonly program: CompiledProgram | null;
@@ -50,6 +51,13 @@ function DiagramInner({ program, result, timeIndex }: DiagramProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutErr, setLayoutErr] = useState<string | null>(null);
+
+  // Causal Lens — FQN of the variable focused via node click. Cleared on
+  // model change so a stale FQN from a previous model never lingers.
+  const [lensFqn, setLensFqn] = useState<string | null>(null);
+  useEffect(() => {
+    setLensFqn(null);
+  }, [program]);
 
   // Local scrubber state — used when the parent doesn't pass `timeIndex`.
   // Reset to the final step whenever the result identity changes (new run).
@@ -292,10 +300,25 @@ function DiagramInner({ program, result, timeIndex }: DiagramProps) {
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
+          onNodeClick={(_, node) => {
+            // Group + cloud nodes don't carry a meaningful FQN — ignore clicks.
+            if (node.type === 'group' || node.type === 'cloud') return;
+            const fqn = (node.data as { fqn?: string }).fqn;
+            if (fqn) setLensFqn(fqn);
+          }}
         >
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#E5E3DD" />
           <Controls showInteractive={false} />
         </ReactFlow>
+        {lensFqn && program && (
+          <CausalLens
+            fqn={lensFqn}
+            program={program}
+            result={result ?? null}
+            onSelect={setLensFqn}
+            onClose={() => setLensFqn(null)}
+          />
+        )}
       </div>
     </div>
   );

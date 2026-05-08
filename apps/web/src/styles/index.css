@@ -120,6 +120,37 @@ a:hover {
   grid-template-rows: var(--header-h) 1fr;
 }
 
+/* Embed mode (?embed=1): no header, no editor pane — only the right pane.
+   Designed to fit cleanly into a host page's <iframe>. */
+.app--embed {
+  grid-template-rows: 1fr;
+  position: relative;
+}
+.app--embed .main {
+  grid-template-columns: 1fr;
+}
+.embed-breakout {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 100;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  text-decoration: none;
+  opacity: 0.6;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.embed-breakout:hover {
+  opacity: 1;
+  color: var(--accent);
+  text-decoration: none;
+}
+
 /* ─── Header ─────────────────────────────────────────────────────────────── */
 .header {
   display: flex;
@@ -1249,6 +1280,165 @@ a:hover {
   font-variant-numeric: tabular-nums;
   pointer-events: none;
   letter-spacing: 0;
+}
+
+/* ─── Causal Lens (floating panel over the diagram) ─────────────────────── */
+.lens {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(15, 76, 92, 0.08);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+}
+.lens__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.lens__kind {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.06em;
+  color: #FFFFFF;
+}
+.lens__kind--stock { background: #1F1F1F; }
+.lens__kind--flow { background: #A0742E; }
+.lens__kind--calc { background: #5C5A55; }
+.lens__kind--constant { background: #0F4C5C; }
+.lens__kind--map { background: #5C2B5B; }
+.lens__name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-1);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lens__close {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  font-size: 16px;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.lens__close:hover {
+  background: var(--surface-2);
+  color: var(--ink-1);
+}
+.lens__body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.lens__body--empty {
+  color: var(--ink-3);
+  font-style: italic;
+  text-align: center;
+}
+.lens__spark {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+}
+.lens__spark-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.lens__const {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.lens__const code {
+  background: transparent;
+  color: var(--ink-1);
+  font-variant-numeric: tabular-nums;
+}
+.lens__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lens__section-title {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.lens__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lens__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--ink-1);
+  border-radius: 3px;
+  width: 100%;
+  text-align: left;
+}
+.lens__link:hover {
+  background: var(--surface-2);
+}
+.lens__link code {
+  background: transparent;
+  color: inherit;
+}
+.lens__pol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  font-weight: 700;
+}
+.lens__pol--pos { color: #2E7D5C; }
+.lens__pol--neg { color: #B23A2C; }
+.lens__pol--unk { color: var(--ink-3); }
+.lens__empty {
+  color: var(--ink-3);
+  font-style: italic;
+  font-size: 11px;
+  text-align: center;
+  padding: 8px 0;
 }
 
 /* ─── Tornado (sensitivity) ─────────────────────────────────────────────── */

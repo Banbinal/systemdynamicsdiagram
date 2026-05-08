@@ -50,6 +50,15 @@ function shortName(fqn: string): string {
   return i < 0 ? fqn : fqn.slice(i + 1);
 }
 
+/** Strip the `embed=1` (and `tab=…`) params so the breakout link opens the
+ *  full editor. Preserves the share-link hash if present. */
+function removeEmbedFromHref(href: string): string {
+  const url = new URL(href);
+  url.searchParams.delete('embed');
+  url.searchParams.delete('tab');
+  return url.toString();
+}
+
 interface ToastMsg {
   readonly id: number;
   readonly text: string;
@@ -58,7 +67,22 @@ interface ToastMsg {
 
 type PrintingState = 'off' | 'mounting' | 'ready';
 
+const TAB_NAMES: Tab[] = ['model', 'simulation', 'compare', 'data', 'checks', 'sensitivity'];
+
+/** Read embed mode + initial tab from `?embed=1[&tab=simulation]` once at boot. */
+function readEmbedConfig(): { embed: boolean; initialTab: Tab | null } {
+  if (typeof window === 'undefined') return { embed: false, initialTab: null };
+  const params = new URLSearchParams(window.location.search);
+  const embed = params.get('embed') === '1';
+  const tabParam = params.get('tab');
+  const initialTab: Tab | null =
+    tabParam && (TAB_NAMES as string[]).includes(tabParam) ? (tabParam as Tab) : null;
+  return { embed, initialTab };
+}
+
 export function App() {
+  const embedConfig = useMemo(() => readEmbedConfig(), []);
+  const embedMode = embedConfig.embed;
   const [activeId, setActiveId] = useState<string>(DEFAULT_EXAMPLE.id);
   const [sources, setSources] = useState<Record<string, string>>(() =>
     Object.fromEntries(EXAMPLES.map((ex) => [ex.id, ex.source])),
@@ -66,7 +90,7 @@ export function App() {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   // SyntheSim-style live overrides: keyed by constant FQN. Reset on model change.
   const [tweakOverrides, setTweakOverrides] = useState<Readonly<Record<string, number>>>({});
-  const [tab, setTab] = useState<Tab>('model');
+  const [tab, setTab] = useState<Tab>(embedConfig.initialTab ?? 'model');
   // Phase-plot mode: time series (default) vs (X(t), Y(t)) trajectory.
   const [plotMode, setPlotMode] = useState<'time' | 'phase'>('time');
   const [phaseX, setPhaseX] = useState<string>('');
@@ -333,22 +357,37 @@ export function App() {
 
   return (
     <>
-    <div className="app">
-      <Header
-        examples={EXAMPLES}
-        activeId={active.id}
-        onSelect={handleSelect}
-        status={sim.status}
-        elapsedMs={sim.elapsedMs}
-        stepCount={stepCount}
-        onShare={handleShare}
-        onExportPdf={handleExportPdf}
-        isExporting={printing !== 'off'}
-        onOpenDocs={() => setView('docs')}
-        onDownloadSkill={handleDownloadSkill}
-      />
+    <div className={'app' + (embedMode ? ' app--embed' : '')}>
+      {!embedMode && (
+        <Header
+          examples={EXAMPLES}
+          activeId={active.id}
+          onSelect={handleSelect}
+          status={sim.status}
+          elapsedMs={sim.elapsedMs}
+          stepCount={stepCount}
+          onShare={handleShare}
+          onExportPdf={handleExportPdf}
+          isExporting={printing !== 'off'}
+          onOpenDocs={() => setView('docs')}
+          onDownloadSkill={handleDownloadSkill}
+        />
+      )}
+
+      {embedMode && (
+        <a
+          className="embed-breakout"
+          href={removeEmbedFromHref(window.location.href)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open in the full editor"
+        >
+          ↗ Open in editor
+        </a>
+      )}
 
       <div className="main">
+        {!embedMode && (
         <section className="pane pane--left">
           <div className="pane__header">Source · {active.title}.sd</div>
 
@@ -385,6 +424,7 @@ export function App() {
             />
           </div>
         </section>
+        )}
 
         <section className="pane pane--right">
           <div className="tabs" role="tablist">
