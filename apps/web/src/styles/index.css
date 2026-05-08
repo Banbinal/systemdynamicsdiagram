@@ -715,6 +715,82 @@ a:hover {
   min-height: 0;
 }
 
+/* ─── Simulation toolbar (mode toggle + phase axis selectors) ───────────── */
+.sim-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 8px 8px;
+  border-bottom: 1px dashed var(--border);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.sim-toolbar__modes {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sim-toolbar__mode {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  background: var(--surface);
+  border: 0;
+  padding: 4px 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.sim-toolbar__mode + .sim-toolbar__mode {
+  border-left: 1px solid var(--border);
+}
+.sim-toolbar__mode:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink-1);
+}
+.sim-toolbar__mode--on {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+.sim-toolbar__mode--on:hover {
+  background: var(--accent-2);
+  color: #FFFFFF;
+}
+.sim-toolbar__mode:disabled {
+  color: var(--ink-4);
+  cursor: not-allowed;
+}
+.sim-toolbar__axes {
+  display: inline-flex;
+  gap: 12px;
+}
+.sim-toolbar__axis {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.sim-toolbar__axis span {
+  font-family: var(--font-mono);
+  color: var(--ink-3);
+}
+.sim-toolbar__axis select {
+  font: 12px var(--font-sans);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--ink-1);
+  cursor: pointer;
+}
+.sim-toolbar__axis select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
 /* ─── Simulation layout (chart + live tweak sidebar) ─────────────────────── */
 .sim-layout {
   display: grid;

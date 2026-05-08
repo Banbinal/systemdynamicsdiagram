@@ -21,6 +21,7 @@ import { Diagram } from './components/Diagram.tsx';
 import { Loops } from './components/Loops.tsx';
 import { Tweak } from './components/Tweak.tsx';
 import { Checks } from './components/Checks.tsx';
+import { PhasePlot } from './components/PhasePlot.tsx';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
@@ -65,6 +66,10 @@ export function App() {
   // SyntheSim-style live overrides: keyed by constant FQN. Reset on model change.
   const [tweakOverrides, setTweakOverrides] = useState<Readonly<Record<string, number>>>({});
   const [tab, setTab] = useState<Tab>('model');
+  // Phase-plot mode: time series (default) vs (X(t), Y(t)) trajectory.
+  const [plotMode, setPlotMode] = useState<'time' | 'phase'>('time');
+  const [phaseX, setPhaseX] = useState<string>('');
+  const [phaseY, setPhaseY] = useState<string>('');
   const [view, setView] = useState<View>('workbench');
   const [toasts, setToasts] = useState<readonly ToastMsg[]>([]);
   const [printing, setPrinting] = useState<PrintingState>('off');
@@ -136,6 +141,22 @@ export function App() {
   useEffect(() => {
     setTweakOverrides({});
   }, [sim.program]);
+
+  // Default phase-plot axes: first two stocks (in declaration order). Reset
+  // when the model changes so we don't carry stale FQNs into a different
+  // model that happens to be open.
+  useEffect(() => {
+    if (sim.stockFqns.length >= 2) {
+      setPhaseX(sim.stockFqns[0]!);
+      setPhaseY(sim.stockFqns[1]!);
+    } else if (sim.stockFqns.length === 1) {
+      setPhaseX(sim.stockFqns[0]!);
+      setPhaseY(sim.stockFqns[0]!);
+    } else {
+      setPhaseX('');
+      setPhaseY('');
+    }
+  }, [sim.stockFqns]);
 
   // Default values per constant — what `simulate` would pick if no override
   // were applied. We need these for the slider range and "modified" indicator.
@@ -453,13 +474,72 @@ export function App() {
                     )}
                   </span>
                 </div>
+                <div className="sim-toolbar" role="group" aria-label="Plot mode">
+                  <div className="sim-toolbar__modes">
+                    <button
+                      type="button"
+                      className={'sim-toolbar__mode' + (plotMode === 'time' ? ' sim-toolbar__mode--on' : '')}
+                      onClick={() => setPlotMode('time')}
+                    >
+                      Time series
+                    </button>
+                    <button
+                      type="button"
+                      className={'sim-toolbar__mode' + (plotMode === 'phase' ? ' sim-toolbar__mode--on' : '')}
+                      onClick={() => setPlotMode('phase')}
+                      disabled={sim.stockFqns.length < 2}
+                      title={
+                        sim.stockFqns.length < 2
+                          ? 'Phase plot needs at least two stocks'
+                          : 'Plot one stock against another in state space'
+                      }
+                    >
+                      Phase plot
+                    </button>
+                  </div>
+                  {plotMode === 'phase' && sim.stockFqns.length >= 2 && (
+                    <div className="sim-toolbar__axes">
+                      <label className="sim-toolbar__axis">
+                        <span>X</span>
+                        <select value={phaseX} onChange={(e) => setPhaseX(e.target.value)}>
+                          {sim.stockFqns.map((fqn) => (
+                            <option key={fqn} value={fqn}>{shortName(fqn)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="sim-toolbar__axis">
+                        <span>Y</span>
+                        <select value={phaseY} onChange={(e) => setPhaseY(e.target.value)}>
+                          {sim.stockFqns.map((fqn) => (
+                            <option key={fqn} value={fqn}>{shortName(fqn)}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </div>
                 <div className="sim-layout">
                   <div className="sim-layout__chart">
                     {chartResult && chartResult.time.length > 0 ? (
-                      <>
-                        <Chart time={chartResult.time} series={series} />
-                        <ChartLegend series={series} onToggle={toggleSeries} />
-                      </>
+                      plotMode === 'time' ? (
+                        <>
+                          <Chart time={chartResult.time} series={series} />
+                          <ChartLegend series={series} onToggle={toggleSeries} />
+                        </>
+                      ) : (
+                        <PhasePlot
+                          time={chartResult.time}
+                          xValues={chartResult.stocks[phaseX] ?? new Float64Array()}
+                          yValues={chartResult.stocks[phaseY] ?? new Float64Array()}
+                          xLabel={shortName(phaseX)}
+                          yLabel={shortName(phaseY)}
+                          color={
+                            SERIES_COLORS[
+                              sim.stockFqns.indexOf(phaseY) % SERIES_COLORS.length
+                            ] ?? SERIES_COLORS[0]!
+                          }
+                        />
+                      )
                     ) : (
                       <div className="placeholder">
                         {sim.status === 'error'
