@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { simulate, type SimulationResult } from '@sysdyn/core';
+
 import { EXAMPLES, DEFAULT_EXAMPLE, type Example } from './examples.ts';
 import { useSimulation } from './hooks/useSimulation.ts';
 import {
@@ -17,6 +19,7 @@ import { TerminalTable } from './components/TerminalTable.tsx';
 import { Header } from './components/Header.tsx';
 import { Diagram } from './components/Diagram.tsx';
 import { Loops } from './components/Loops.tsx';
+import { Tweak } from './components/Tweak.tsx';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
@@ -58,6 +61,8 @@ export function App() {
     Object.fromEntries(EXAMPLES.map((ex) => [ex.id, ex.source])),
   );
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  // SyntheSim-style live overrides: keyed by constant FQN. Reset on model change.
+  const [tweakOverrides, setTweakOverrides] = useState<Readonly<Record<string, number>>>({});
   const [tab, setTab] = useState<Tab>('model');
   const [view, setView] = useState<View>('workbench');
   const [toasts, setToasts] = useState<readonly ToastMsg[]>([]);
@@ -118,10 +123,62 @@ export function App() {
   const handleSelect = (id: string) => {
     setActiveId(id);
     setHidden(new Set());
+    setTweakOverrides({});
   };
   const handleEdit = (next: string) => {
     setSources((prev) => ({ ...prev, [active.id]: next }));
   };
+
+  // Reset overrides when the underlying program changes (recompile from edit
+  // or model swap). The compiled program identity changes per recompile so a
+  // referential check is enough; this keeps tweaks across pure UI changes.
+  useEffect(() => {
+    setTweakOverrides({});
+  }, [sim.program]);
+
+  // Default values per constant — what `simulate` would pick if no override
+  // were applied. We need these for the slider range and "modified" indicator.
+  // Approximated by reading the *initial* values from the canonical sim result;
+  // fallback: 0. (Constants don't appear in `result.calcs`, but they're the
+  // result of evaluating CompiledExpr against literals/other constants — a
+  // proper read-out would require exposing the runtime's constants buffer.
+  // For v1, we re-run a no-override simulate just to get them; cheap enough.)
+  const tweakDefaults = useMemo<Readonly<Record<string, number>>>(() => {
+    if (!sim.program) return {};
+    // Extract constant defaults by re-using the runtime's evaluator via a
+    // throwaway simulate; the values land in `result.calcs` only for `calc`s,
+    // so for now we read them off the IR by best-effort. The simplest correct
+    // path is to expose them on the program API — until then, a no-override
+    // simulate followed by a peek wouldn't give us constants either.
+    // Pragmatic compromise: rely on each constant having a NumberLit or const-
+    // foldable expr; otherwise a slider centred on 0 still works.
+    const out: Record<string, number> = {};
+    for (const c of sim.program.constants) {
+      // Const fold: walk the CompiledExpr ops looking for a single PushNum.
+      const ops = c.expr.ops;
+      const op0 = ops[0];
+      if (ops.length === 1 && op0 && op0.kind === 'PushNum') {
+        out[c.fqn] = op0.value;
+      } else {
+        // Mixed expression — leave it to the slider's effective bound logic
+        // (which uses 0 as a sane fallback). The user can still drag from 0.
+        out[c.fqn] = 0;
+      }
+    }
+    return out;
+  }, [sim.program]);
+
+  // Tweaked simulation: re-run only when overrides or program change. Falls
+  // back to the canonical run when there are no overrides, to avoid the cost.
+  const tweakedResult = useMemo<SimulationResult | null>(() => {
+    if (!sim.program || !sim.result) return sim.result;
+    if (Object.keys(tweakOverrides).length === 0) return sim.result;
+    try {
+      return simulate(sim.program, { overrides: tweakOverrides });
+    } catch {
+      return sim.result;
+    }
+  }, [sim.program, sim.result, tweakOverrides]);
 
   const errorCount = useMemo(
     () => sim.diagnostics.filter((d) => d.severity === 'error').length,
@@ -132,16 +189,19 @@ export function App() {
     [sim.diagnostics],
   );
 
+  // The chart uses the tweaked result whenever overrides are non-empty so
+  // SyntheSim sliders feel live.
+  const chartResult = tweakedResult ?? sim.result;
   const series: ChartSeries[] = useMemo(() => {
-    if (!sim.result) return [];
+    if (!chartResult) return [];
     return sim.stockFqns.map((fqn, i) => ({
       fqn,
       label: shortName(fqn),
-      values: sim.result!.stocks[fqn] ?? new Float64Array(),
+      values: chartResult.stocks[fqn] ?? new Float64Array(),
       color: SERIES_COLORS[i % SERIES_COLORS.length]!,
       visible: !hidden.has(fqn),
     }));
-  }, [sim.result, sim.stockFqns, hidden]);
+  }, [chartResult, sim.stockFqns, hidden]);
 
   const toggleSeries = (fqn: string) => {
     setHidden((prev) => {
@@ -369,25 +429,40 @@ export function App() {
             )}
 
             {tab === 'simulation' && (
-              <div className="card">
+              <div className="card card--fill">
                 <div className="card__title">
                   <h3 className="card__title-text">Stocks over time</h3>
                   <span className="card__title-sub">
                     solver: rk4 · {stepCount} steps · {sim.elapsedMs.toFixed(1)}ms
+                    {Object.keys(tweakOverrides).length > 0 && (
+                      <span className="card__title-tag">
+                        · live tweak ({Object.keys(tweakOverrides).length})
+                      </span>
+                    )}
                   </span>
                 </div>
-                {sim.result && sim.result.time.length > 0 ? (
-                  <>
-                    <Chart time={sim.result.time} series={series} />
-                    <ChartLegend series={series} onToggle={toggleSeries} />
-                  </>
-                ) : (
-                  <div className="placeholder">
-                    {sim.status === 'error'
-                      ? 'Resolve the diagnostics above to run the simulation.'
-                      : 'Compiling…'}
+                <div className="sim-layout">
+                  <div className="sim-layout__chart">
+                    {chartResult && chartResult.time.length > 0 ? (
+                      <>
+                        <Chart time={chartResult.time} series={series} />
+                        <ChartLegend series={series} onToggle={toggleSeries} />
+                      </>
+                    ) : (
+                      <div className="placeholder">
+                        {sim.status === 'error'
+                          ? 'Resolve the diagnostics above to run the simulation.'
+                          : 'Compiling…'}
+                      </div>
+                    )}
                   </div>
-                )}
+                  <Tweak
+                    program={sim.program}
+                    overrides={tweakOverrides}
+                    onChange={setTweakOverrides}
+                    defaults={tweakDefaults}
+                  />
+                </div>
               </div>
             )}
 
