@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
-import { generateSdSource, type GenerateMode } from '../lib/gemini.ts';
+import {
+  generateSdSource,
+  getStoredApiKey,
+  setStoredApiKey,
+  type GenerateMode,
+} from '../lib/gemini.ts';
 import { loadSkillContext } from '../lib/skillContext.ts';
 
 interface AiAssistModalProps {
@@ -10,7 +15,8 @@ interface AiAssistModalProps {
 }
 
 export function AiAssistModal({ currentSource, onClose, onApply }: AiAssistModalProps) {
-  const [apiKey, setApiKey] = useState('');
+  // Pre-fill the key from localStorage so users only paste it once per browser.
+  const [apiKey, setApiKey] = useState(() => getStoredApiKey());
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<GenerateMode>('create');
   const [busy, setBusy] = useState(false);
@@ -63,6 +69,9 @@ export function AiAssistModal({ currentSource, onClose, onApply }: AiAssistModal
         setError('Gemini returned an empty response.');
         return;
       }
+      // Save the working key for future one-click features (loop explanation,
+      // model chat). The user can clear it by emptying the field on next open.
+      setStoredApiKey(key);
       onApply(source);
       onClose();
     } catch (err) {

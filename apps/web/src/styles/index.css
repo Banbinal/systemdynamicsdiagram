@@ -1108,6 +1108,55 @@ a:hover {
 .loop__arrow--unk {
   color: var(--ink-3);
 }
+.loop__explain-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  color: var(--ink-3);
+}
+.loop__explain-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+.loop__explain-btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.loop__explain {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--accent-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: 3px;
+}
+.loop__explain--error {
+  background: var(--error-soft);
+  border-left-color: var(--error);
+}
+.loop__explain-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 700;
+}
+.loop__explain--error .loop__explain-label {
+  color: var(--error);
+}
+.loop__explain-text {
+  margin: 4px 0 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-1);
+  white-space: pre-wrap;
+}
 
 /* ─── Diagram (Mermaid) ──────────────────────────────────────────────────── */
 .diagram-wrap {

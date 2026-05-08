@@ -604,7 +604,7 @@ export function App() {
                   <div className="model-layout__diagram">
                     <Diagram program={sim.program} result={chartResult} />
                   </div>
-                  <Loops program={sim.program} />
+                  <Loops program={sim.program} source={source} />
                 </div>
               </div>
             )}
