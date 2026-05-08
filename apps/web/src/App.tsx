@@ -22,6 +22,7 @@ import { Loops } from './components/Loops.tsx';
 import { Tweak } from './components/Tweak.tsx';
 import { Checks } from './components/Checks.tsx';
 import { PhasePlot } from './components/PhasePlot.tsx';
+import { Tornado } from './components/Tornado.tsx';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
@@ -39,7 +40,7 @@ const SERIES_COLORS = [
   'var(--series-8)',
 ];
 
-type Tab = 'model' | 'simulation' | 'compare' | 'data' | 'checks';
+type Tab = 'model' | 'simulation' | 'compare' | 'data' | 'checks' | 'sensitivity';
 type View = 'workbench' | 'docs';
 
 const SKILL_ZIP_HREF = `${import.meta.env.BASE_URL}system-dynamics-diagram.zip`;
@@ -443,6 +444,17 @@ export function App() {
                 <span className="tab__count">{sim.program.checks.length}</span>
               </button>
             )}
+            {sim.program && sim.program.sweeps.length > 0 && (
+              <button
+                className="tab"
+                role="tab"
+                aria-selected={tab === 'sensitivity'}
+                onClick={() => setTab('sensitivity')}
+              >
+                Sensitivity
+                <span className="tab__count">{sim.program.sweeps.length}</span>
+              </button>
+            )}
           </div>
 
           <div className="tab-content" role="tabpanel">
@@ -587,6 +599,18 @@ export function App() {
                   </span>
                 </div>
                 <Checks program={sim.program} />
+              </div>
+            )}
+
+            {tab === 'sensitivity' && (
+              <div className="card">
+                <div className="card__title">
+                  <h3 className="card__title-text">Tornado — one-at-a-time sensitivity</h3>
+                  <span className="card__title-sub">
+                    each sweep low/high vs baseline; sorted by |swing|
+                  </span>
+                </div>
+                <Tornado program={sim.program} stockFqns={sim.stockFqns} />
               </div>
             )}
           </div>
