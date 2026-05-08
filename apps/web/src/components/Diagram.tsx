@@ -13,7 +13,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import type { CompiledProgram, SimulationResult } from '@sysdyn/core';
+import {
+  findLoopDominance,
+  findLoops,
+  type CompiledProgram,
+  type Loop,
+  type SimulationResult,
+} from '@sysdyn/core';
 
 import { layoutProgramGraph } from '../lib/elkLayout.ts';
 import {
@@ -33,6 +39,12 @@ interface DiagramProps {
    * final recorded step (i.e. "where each stock ended up").
    */
   readonly timeIndex?: number;
+  /**
+   * Reports the dominant loop id at the current scrubber position so
+   * sibling components (e.g. the Loops sidebar) can show a "dominant"
+   * badge synchronised with the diagram's edge highlight.
+   */
+  readonly onDominantLoopChange?: (loopId: string | null) => void;
 }
 
 const PROVIDED_NODE_TYPES = NODE_TYPES;
@@ -46,7 +58,7 @@ export function Diagram(props: DiagramProps) {
   );
 }
 
-function DiagramInner({ program, result, timeIndex }: DiagramProps) {
+function DiagramInner({ program, result, timeIndex, onDominantLoopChange }: DiagramProps) {
   const [showAux, setShowAux] = useState(true);
   const [mode, setMode] = useState<'sfd' | 'cld'>('sfd');
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -59,6 +71,19 @@ function DiagramInner({ program, result, timeIndex }: DiagramProps) {
   useEffect(() => {
     setLensFqn(null);
   }, [program]);
+
+  // ── Loop dominance ───────────────────────────────────────────────────────
+  // Detect loops, compute per-step activity, derive the dominant loop at
+  // the current scrubber position. Memoised on program / result identity so
+  // the per-step series isn't recomputed on every effIndex tick.
+  const loops = useMemo<readonly Loop[]>(
+    () => (program ? findLoops(program) : []),
+    [program],
+  );
+  const dominance = useMemo(() => {
+    if (!program || !result || loops.length === 0) return null;
+    return findLoopDominance(program, result, loops);
+  }, [program, result, loops]);
 
   // Local scrubber state — used when the parent doesn't pass `timeIndex`.
   // Reset to the final step whenever the result identity changes (new run).
@@ -154,6 +179,82 @@ function DiagramInner({ program, result, timeIndex }: DiagramProps) {
       cancelled = true;
     };
   }, [graph, setNodes, setEdges]);
+
+  // ── Loop highlight enrichment ────────────────────────────────────────────
+  // The set of React Flow edge IDs that visually trace the dominant loop
+  // at the current scrubber position. Updated when scrubber or run changes.
+  const dominantLoopId = useMemo(() => {
+    if (!dominance) return null;
+    return dominance.dominant[Math.min(effIndex, dominance.dominant.length - 1)] ?? null;
+  }, [dominance, effIndex]);
+
+  // Notify parent so sibling panels (e.g. Loops) can sync.
+  useEffect(() => {
+    if (onDominantLoopChange) onDominantLoopChange(dominantLoopId);
+  }, [dominantLoopId, onDominantLoopChange]);
+
+  const highlightedEdgeIds = useMemo(() => {
+    const out = new Set<string>();
+    if (!dominantLoopId || !program) return out;
+    const loop = loops.find((l) => l.id === dominantLoopId);
+    if (!loop) return out;
+    const idOf = (fqn: string) => 'n_' + fqn.replace(/[.\s]/g, '_');
+    for (let i = 0; i < loop.nodes.length; i++) {
+      const sourceFqn = loop.nodes[i]!;
+      const targetFqn = loop.nodes[(i + 1) % loop.nodes.length]!;
+      const targetSym = program.symbols.byFqn(targetFqn);
+      const sourceSym = program.symbols.byFqn(sourceFqn);
+      if (!targetSym || !sourceSym) continue;
+
+      if (targetSym.kind === 'calc') {
+        // Direct info-link from source to calc.
+        const sId = idOf(sourceFqn);
+        const tId = idOf(targetFqn);
+        const e = edges.find((edg) => edg.source === sId && edg.target === tId);
+        if (e) out.add(e.id);
+      } else if (targetSym.kind === 'stock') {
+        // Mediated by a flow. Highlight the source→flow info-link AND the
+        // matter-flow arc(s) connecting that flow to the target stock.
+        for (const fi of program.flowInputs) {
+          if (fi.source !== sourceSym.id) continue;
+          const flowSym = program.symbols.byId(fi.flow);
+          if (!flowSym) continue;
+          const touches = program.flowEffects.some((eff) => {
+            if (eff.flowFqn !== flowSym.fqn) return false;
+            const stock = program.stocks.find((s) => s.slot === eff.targetSlot);
+            return stock?.fqn === targetFqn;
+          });
+          if (!touches) continue;
+          const sId = idOf(sourceFqn);
+          const fId = idOf(flowSym.fqn);
+          const tId = idOf(targetFqn);
+          // source → flow info-link
+          const ei = edges.find((edg) => edg.source === sId && edg.target === fId && edg.type === 'info');
+          if (ei) out.add(ei.id);
+          // flow → stock matter
+          const em1 = edges.find((edg) => edg.source === fId && edg.target === tId && edg.type === 'matter');
+          if (em1) out.add(em1.id);
+          // stock → flow matter (negative effect)
+          const em2 = edges.find((edg) => edg.source === tId && edg.target === fId && edg.type === 'matter');
+          if (em2) out.add(em2.id);
+        }
+      }
+    }
+    return out;
+  }, [dominantLoopId, loops, program, edges]);
+
+  // Apply highlight to edge data — separate from rate enrichment so the two
+  // can update independently without thrashing the edge tree.
+  useEffect(() => {
+    setEdges((curr) =>
+      curr.map((e) => {
+        const shouldHighlight = highlightedEdgeIds.has(e.id);
+        const wasHighlighted = !!(e.data as { loopHighlight?: boolean })?.loopHighlight;
+        if (shouldHighlight === wasHighlighted) return e;
+        return { ...e, data: { ...e.data, loopHighlight: shouldHighlight } } as Edge;
+      }),
+    );
+  }, [highlightedEdgeIds, setEdges]);
 
   // ── Matter-edge rate enrichment ─────────────────────────────────────────
   // Per matter edge, attach the current flow rate (and a per-flow max for

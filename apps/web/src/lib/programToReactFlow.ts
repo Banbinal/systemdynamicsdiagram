@@ -67,10 +67,15 @@ export type MatterEdgeData = {
    * `Diagram.tsx` after each scrubber update; `undefined` at first render.
    */
   readonly rate?: { readonly value: number; readonly max: number };
+  /** Set when this edge belongs to the loop that's dominant at the current
+   *  scrubber position. Renderer thickens the stroke + glows. */
+  readonly loopHighlight?: boolean;
 };
 export type InfoEdgeData = {
   readonly polarity: '+' | '-' | '?';
   readonly delayed: boolean;
+  /** Set when this edge belongs to the loop that's dominant right now. */
+  readonly loopHighlight?: boolean;
 };
 
 export type DiagramEdge =

@@ -96,6 +96,10 @@ export function App() {
   const [tab, setTab] = useState<Tab>(embedConfig.initialTab ?? 'model');
   // Phase-plot mode: time series (default) vs (X(t), Y(t)) trajectory.
   const [plotMode, setPlotMode] = useState<'time' | 'phase'>('time');
+  // Dominant loop id reported by the Diagram's scrubber — surfaced as a
+  // badge in the Loops sidebar so the user sees the active loop name as
+  // the run plays.
+  const [dominantLoopId, setDominantLoopId] = useState<string | null>(null);
   const [phaseX, setPhaseX] = useState<string>('');
   const [phaseY, setPhaseY] = useState<string>('');
   const [view, setView] = useState<View>('workbench');
@@ -602,9 +606,17 @@ export function App() {
                 </div>
                 <div className="model-layout">
                   <div className="model-layout__diagram">
-                    <Diagram program={sim.program} result={chartResult} />
+                    <Diagram
+                      program={sim.program}
+                      result={chartResult}
+                      onDominantLoopChange={setDominantLoopId}
+                    />
                   </div>
-                  <Loops program={sim.program} source={source} />
+                  <Loops
+                    program={sim.program}
+                    source={source}
+                    dominantLoopId={dominantLoopId}
+                  />
                 </div>
               </div>
             )}

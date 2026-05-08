@@ -87,6 +87,11 @@ export type {
 // Semantic
 export type { Symbol, SymbolKind, SymbolTable } from './semantic/symbols.js';
 export { findLoops, type Loop } from './semantic/loops.js';
+export {
+  findLoopDominance,
+  type LoopDominance,
+  type LoopActivitySeries,
+} from './runtime/loopDominance.js';
 
 // IR
 export type {

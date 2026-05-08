@@ -1051,6 +1051,24 @@ a:hover {
 .loop--b {
   border-left: 3px solid #B23A2C;
 }
+/* Dominant loop at the current scrubber position — quietly emphasised so the
+   user can spot it without losing the rest of the list. */
+.loop--dominant {
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent-ring);
+}
+.loop__dominant {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #FFFFFF;
+  background: var(--accent);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
 .loop__head {
   display: flex;
   align-items: baseline;

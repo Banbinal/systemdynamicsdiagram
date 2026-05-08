@@ -8,6 +8,9 @@ interface LoopsProps {
   readonly program: CompiledProgram | null;
   /** DSL source — handed to the AI explainer alongside the loop structure. */
   readonly source: string;
+  /** ID of the loop currently dominant in the diagram (synchronised with
+   *  the scrubber). Receives a "dominant" badge in the list. */
+  readonly dominantLoopId?: string | null;
 }
 
 function shortName(fqn: string): string {
@@ -33,7 +36,7 @@ type ExplainState =
   | { status: 'done'; text: string }
   | { status: 'error'; message: string };
 
-export function Loops({ program, source }: LoopsProps) {
+export function Loops({ program, source, dominantLoopId }: LoopsProps) {
   const loops = useMemo<readonly Loop[]>(() => (program ? findLoops(program) : []), [program]);
 
   // Per-loop AI explanation state, keyed by loop id. Reset whenever the
@@ -106,8 +109,12 @@ export function Loops({ program, source }: LoopsProps) {
       <ul className="loops__list">
         {loops.map((loop) => {
           const ex = explanations[loop.id] ?? { status: 'idle' };
+          const isDominant = dominantLoopId === loop.id;
           return (
-            <li key={loop.id} className={`loop loop--${loop.kind === 'R' ? 'r' : 'b'}`}>
+            <li
+              key={loop.id}
+              className={`loop loop--${loop.kind === 'R' ? 'r' : 'b'}` + (isDominant ? ' loop--dominant' : '')}
+            >
               <div className="loop__head">
                 <span className={`loop__badge loop__badge--${loop.kind === 'R' ? 'r' : 'b'}`}>
                   {loop.id}
@@ -115,6 +122,11 @@ export function Loops({ program, source }: LoopsProps) {
                 <span className="loop__nature">
                   {loop.kind === 'R' ? 'Reinforcing' : 'Balancing'}
                 </span>
+                {isDominant && (
+                  <span className="loop__dominant" title="Most active loop at the current scrubber time">
+                    dominant
+                  </span>
+                )}
                 {loop.unknownCount > 0 && (
                   <span
                     className="loop__warn"

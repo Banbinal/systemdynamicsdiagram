@@ -45,6 +45,7 @@ export function MatterEdge({
     targetPosition,
   });
   const rate = data?.rate;
+  const highlighted = data?.loopHighlight === true;
   // Normalise the rate to (0..1] for animation. A zero rate disables the
   // animation entirely (no visual movement); a max-rate flow runs in 0.5s
   // per dash cycle, slowing to ~3s as the rate drops to 5%.
@@ -61,7 +62,8 @@ export function MatterEdge({
       {...(markerEnd ? { markerEnd } : {})}
       style={{
         stroke: MATTER_STROKE,
-        strokeWidth: 2.5,
+        strokeWidth: highlighted ? 4.5 : 2.5,
+        filter: highlighted ? 'drop-shadow(0 0 4px #A0742E88)' : undefined,
         ...(animated
           ? {
               strokeDasharray: '8 6',
@@ -94,6 +96,7 @@ export function InfoEdge({
     targetPosition,
   });
   const polarity = data?.polarity ?? '?';
+  const highlighted = data?.loopHighlight === true;
   const stroke = polarity === '+' ? POS_STROKE : polarity === '-' ? NEG_STROKE : UNK_STROKE;
   const polClass = polarity === '+' ? 'pos' : polarity === '-' ? 'neg' : 'unk';
   const glyph = polarity === '+' ? '+' : polarity === '-' ? '−' : '?';
@@ -106,8 +109,9 @@ export function InfoEdge({
         {...(markerEnd ? { markerEnd } : {})}
         style={{
           stroke,
-          strokeWidth: polarity === '?' ? 1.2 : 1.6,
-          ...(polarity === '?' ? { strokeDasharray: '3 3' } : {}),
+          strokeWidth: highlighted ? 3 : polarity === '?' ? 1.2 : 1.6,
+          filter: highlighted ? `drop-shadow(0 0 4px ${stroke}88)` : undefined,
+          ...(polarity === '?' && !highlighted ? { strokeDasharray: '3 3' } : {}),
         }}
       />
       <EdgeLabelRenderer>
