@@ -120,14 +120,29 @@ Substitute the actual absolute path the script wrote (the script prints it on st
 
 If for some reason the user explicitly asks to see the URL itself, point them at the file path rather than embedding the URL — `cat` / `Get-Content` on the file gives them the canonical, uncorrupted bytes.
 
-A typical hand-off message looks like:
+### Always include the full DSL source in the response
 
-> Modèle créé : *Logistic deer growth with periodic mortality shocks* (one-paragraph summary). Scénarios : `EnlargedReserve` (capacité 8000). Sweep : aucun.
+Below the link hand-off, paste the *entire* `.sd` source inside a fenced code block (use ```` ```sd ```` as the language tag if rendering supports it, otherwise plain ```` ``` ````). The user reads the model from the chat to verify what was built — the link is for *running* it, the inline code is for *reviewing* it. Don't summarize the source or show only excerpts; the whole file goes in.
+
+A complete hand-off looks like:
+
+> Modèle créé : *Logistic deer growth with periodic mortality shocks* (one-paragraph summary).
+>
+> Scénarios : `EnlargedReserve` (capacité 8000). Sweep : aucun.
 >
 > URL signée écrite dans `C:\Users\me\work\model_share_url.txt`. Pour ouvrir dans le simulateur :
 >
 > ```powershell
 > Start-Process (Get-Content 'C:\Users\me\work\model_share_url.txt' -Raw).Trim()
+> ```
+>
+> Source complète :
+>
+> ```sd
+> StartTime = 0
+> EndTime   = 50
+> TimeStep  = 0.25
+> ...
 > ```
 
 ## When the user asks for changes
@@ -142,6 +157,12 @@ If the user replies "make the birth rate higher" or "add a stock for X", edit th
 
 ## Things to get right
 
+- **ASCII only outside of comments.** The lexer rejects non-ASCII characters with SD0010 (`Unexpected character`) anywhere except inside `#` comments. This bites hardest in `title` lines, where it's tempting to drop in typographic punctuation. Concretely, do *not* use:
+  - em-dash `—` (U+2014) or en-dash `–` (U+2013) → use `--` or `-`
+  - curly quotes `"" '' « »` → use straight `"` and `'`
+  - ellipsis `…` (U+2026) → use `...`
+  - non-breaking space, zero-width joiner, emoji, accented letters in identifiers
+  - In particular in identifiers and expressions, stick to `[A-Za-z0-9_]` and the documented operators. Comments after `#` accept Unicode (the lexer strips them before tokenising) — but everything else, including `title`, must be ASCII.
 - **Don't accidentally re-define `time`** — it is a reserved built-in. If you need a "policy onset time" or similar, name it `PolicyStart` or `T0`, never `time`.
 - **Every flow needs at least one effect line.** An empty flow body is a parse error.
 - **Maps need at least two points.** A single-point map is a parse error.
