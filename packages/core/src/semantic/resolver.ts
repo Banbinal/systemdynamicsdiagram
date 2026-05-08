@@ -207,6 +207,12 @@ class Resolver {
           // else can't be plotted on the simulation chart.
           this.resolveQualifiedTarget(stmt.target, ns);
           break;
+        case 'Calibrate':
+          // Each calibration parameter must resolve to a `constant`.
+          for (const p of stmt.params) {
+            this.resolveQualifiedTarget(p.target, ns, 'constant');
+          }
+          break;
         case 'Check':
           for (const inp of stmt.inputs) {
             this.resolveExpr(inp.expr, ns);

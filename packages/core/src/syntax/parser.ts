@@ -43,6 +43,8 @@ import type {
   Program,
   QualifiedRef,
   RefExpr,
+  CalibrateStmt,
+  CalibrationParam,
   ReferencePoint,
   ReferenceStmt,
   ScenarioOverride,
@@ -150,6 +152,7 @@ class Parser {
       case TokenKind.KwLimit: return this.parseLimit();
       case TokenKind.KwCheck: return this.parseCheck();
       case TokenKind.KwReference: return this.parseReference();
+      case TokenKind.KwCalibrate: return this.parseCalibrate();
       default: {
         this.diag('error', 'SD0020', `Unexpected token '${tok.text}' at top level.`, tok.range);
         this.recoverToNewline();
@@ -514,6 +517,78 @@ class Parser {
       x: x.value,
       y: y.value,
       range: { start: open.range.start, end: close.range.end },
+    };
+  }
+
+  private parseCalibrate(): CalibrateStmt | null {
+    const kw = this.advance(); // 'calibrate'
+    if (!this.expect(TokenKind.Colon)) { this.recoverToNewline(); return null; }
+    if (!this.consumeNewline()) return null;
+    if (!this.expect(TokenKind.Indent)) { this.recoverToDedent(); return null; }
+
+    const params: CalibrationParam[] = [];
+    while (this.peek().kind !== TokenKind.Dedent && !this.isAtEnd()) {
+      const t = this.peek();
+      if (t.kind === TokenKind.Newline) { this.advance(); continue; }
+      if (t.kind !== TokenKind.KwBounds) {
+        this.diag(
+          'error',
+          'SD0044',
+          `Expected 'bounds <Constant> = [low, high]' inside calibrate, got '${t.text}'.`,
+          t.range,
+        );
+        this.recoverToNewline();
+        continue;
+      }
+      const p = this.parseCalibrationParam();
+      if (p) params.push(p);
+    }
+    const close = this.expect(TokenKind.Dedent);
+
+    if (params.length === 0) {
+      this.diag(
+        'error',
+        'SD0045',
+        `Calibrate block must declare at least one 'bounds' parameter.`,
+        kw.range,
+      );
+      return null;
+    }
+
+    return {
+      kind: 'Calibrate',
+      params,
+      range: { start: kw.range.start, end: close?.range.end ?? this.previous().range.end },
+    };
+  }
+
+  private parseCalibrationParam(): CalibrationParam | null {
+    const kw = this.advance(); // 'bounds'
+    const target = this.parseQualifiedRef();
+    if (!target) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.LBracket)) { this.recoverToNewline(); return null; }
+    const low = this.maybeSignedNumber();
+    if (!low) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Comma)) { this.recoverToNewline(); return null; }
+    const high = this.maybeSignedNumber();
+    if (!high) { this.recoverToNewline(); return null; }
+    const close = this.expect(TokenKind.RBracket);
+    if (!close) { this.recoverToNewline(); return null; }
+    if (low.value > high.value) {
+      this.diag(
+        'error',
+        'SD0046',
+        `bounds low (${low.value}) must be ≤ high (${high.value}).`,
+        kw.range,
+      );
+    }
+    this.consumeNewline();
+    return {
+      target,
+      low: low.value,
+      high: high.value,
+      range: { start: kw.range.start, end: close.range.end },
     };
   }
 

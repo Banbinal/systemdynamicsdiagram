@@ -25,6 +25,14 @@ export {
   type CheckFail,
   type CheckErr,
 } from './runtime/checks.js';
+export {
+  runCalibration,
+  type CalibrationOptions,
+  type CalibrationResult,
+  type CalibrationOk,
+  type CalibrationErr,
+  type CalibrationParamResult,
+} from './runtime/calibrate.js';
 
 // Diagnostics
 export {
@@ -101,6 +109,8 @@ export type {
   CheckOp,
   CheckTemporal,
   ReferenceModeIR,
+  CalibrateIR,
+  CalibrateParamIR,
 } from './ir/program.js';
 
 // Runtime

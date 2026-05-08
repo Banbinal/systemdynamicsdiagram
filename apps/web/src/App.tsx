@@ -23,6 +23,7 @@ import { Tweak } from './components/Tweak.tsx';
 import { Checks } from './components/Checks.tsx';
 import { PhasePlot } from './components/PhasePlot.tsx';
 import { Tornado } from './components/Tornado.tsx';
+import { Calibrate } from './components/Calibrate.tsx';
 import { importXmile } from './lib/xmileImport.ts';
 import { exportXmile } from './lib/xmileExport.ts';
 import { Compare } from './components/Compare.tsx';
@@ -42,7 +43,7 @@ const SERIES_COLORS = [
   'var(--series-8)',
 ];
 
-type Tab = 'model' | 'simulation' | 'compare' | 'data' | 'checks' | 'sensitivity';
+type Tab = 'model' | 'simulation' | 'compare' | 'data' | 'checks' | 'sensitivity' | 'calibrate';
 type View = 'workbench' | 'docs';
 
 const SKILL_ZIP_HREF = `${import.meta.env.BASE_URL}system-dynamics-diagram.zip`;
@@ -69,7 +70,7 @@ interface ToastMsg {
 
 type PrintingState = 'off' | 'mounting' | 'ready';
 
-const TAB_NAMES: Tab[] = ['model', 'simulation', 'compare', 'data', 'checks', 'sensitivity'];
+const TAB_NAMES: Tab[] = ['model', 'simulation', 'compare', 'data', 'checks', 'sensitivity', 'calibrate'];
 
 /** Read embed mode + initial tab from `?embed=1[&tab=simulation]` once at boot. */
 function readEmbedConfig(): { embed: boolean; initialTab: Tab | null } {
@@ -579,6 +580,17 @@ export function App() {
                 <span className="tab__count">{sim.program.sweeps.length}</span>
               </button>
             )}
+            {sim.program && sim.program.calibration && (
+              <button
+                className="tab"
+                role="tab"
+                aria-selected={tab === 'calibrate'}
+                onClick={() => setTab('calibrate')}
+              >
+                Calibrate
+                <span className="tab__count">{sim.program.calibration.params.length}</span>
+              </button>
+            )}
           </div>
 
           <div className="tab-content" role="tabpanel">
@@ -739,6 +751,28 @@ export function App() {
                   </span>
                 </div>
                 <Tornado program={sim.program} stockFqns={sim.stockFqns} />
+              </div>
+            )}
+
+            {tab === 'calibrate' && (
+              <div className="card">
+                <div className="card__title">
+                  <h3 className="card__title-text">Parameter calibration</h3>
+                  <span className="card__title-sub">
+                    fit free constants to the model's reference modes via Nelder-Mead
+                  </span>
+                </div>
+                <Calibrate
+                  program={sim.program}
+                  onApplyFit={(overrides) => {
+                    setTweakOverrides({ ...tweakOverrides, ...overrides });
+                    setTab('simulation');
+                    pushToast(
+                      `Applied ${Object.keys(overrides).length} fitted value${Object.keys(overrides).length === 1 ? '' : 's'} to live tweak.`,
+                      'ok',
+                    );
+                  }}
+                />
               </div>
             )}
           </div>

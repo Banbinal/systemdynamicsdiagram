@@ -33,6 +33,7 @@ import { resolve } from '../semantic/resolver.js';
 import type { Symbol, SymbolTable } from '../semantic/symbols.js';
 import type {
   CalcStmt,
+  CalibrateStmt,
   CheckStmt,
   ConstantStmt,
   Expr,
@@ -53,6 +54,8 @@ import { lowerExpr, type SlotIndex } from '../ir/lower.js';
 import { precomputeSpline } from '../ir/interp.js';
 import type {
   CalcIR,
+  CalibrateIR,
+  CalibrateParamIR,
   CheckIR,
   CheckInputIR,
   CompiledExpr,
@@ -291,7 +294,20 @@ export function compile(ast: Program): CompileResult {
     references.push({ fqn: sym.fqn, points: sortedPoints });
   }
 
-  // ─── 11. Assemble ──────────────────────────────────────────────────────
+  // ─── 11. Calibration block — last one wins if multiple are declared. ───
+  let calibration: CalibrateIR | null = null;
+  const lastCal = buckets.calibrates[buckets.calibrates.length - 1];
+  if (lastCal) {
+    const calParams: CalibrateParamIR[] = [];
+    for (const p of lastCal.params) {
+      const sym = resolveTarget(r.resolvedRefs, p.target);
+      if (!sym || sym.kind !== 'constant') continue;
+      calParams.push({ fqn: sym.fqn, low: p.low, high: p.high });
+    }
+    if (calParams.length > 0) calibration = { params: calParams };
+  }
+
+  // ─── 12. Assemble ──────────────────────────────────────────────────────
   const program: CompiledProgram = {
     title,
     time,
@@ -309,6 +325,7 @@ export function compile(ast: Program): CompileResult {
     flowInputs,
     checks,
     references,
+    calibration,
     diagnostics,
     stockCount: stocks.length,
     constantCount: constants.length,
@@ -335,6 +352,7 @@ interface Buckets {
   readonly limits: LimitStmt[];
   readonly checks: CheckStmt[];
   readonly references: ReferenceStmt[];
+  readonly calibrates: CalibrateStmt[];
   readonly constantsBySymId: Map<number, { stmt: ConstantStmt; symbol: Symbol }>;
   readonly calcsBySymId: Map<number, { stmt: CalcStmt; symbol: Symbol }>;
 }
@@ -354,6 +372,7 @@ function collectStmts(ast: Program): Buckets {
     limits: [],
     checks: [],
     references: [],
+    calibrates: [],
     constantsBySymId: new Map(),
     calcsBySymId: new Map(),
   };
@@ -380,6 +399,7 @@ function walk(stmts: readonly Stmt[], b: Buckets): void {
       case 'Limit': b.limits.push(s); break;
       case 'Check': b.checks.push(s); break;
       case 'Reference': b.references.push(s); break;
+      case 'Calibrate': b.calibrates.push(s); break;
     }
   }
 }

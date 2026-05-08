@@ -1565,6 +1565,205 @@ a:hover {
   margin-top: 12px;
 }
 
+/* ─── Calibration panel ─────────────────────────────────────────────────── */
+.cal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: var(--font-sans);
+}
+.cal__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: 6px;
+}
+.cal__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.cal__summary {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.cal__params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cal__param {
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cal__param-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-1);
+  background: transparent;
+}
+.cal__param-bounds {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.cal__run-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.cal__error {
+  background: var(--error-soft);
+  color: var(--error);
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.cal__cost {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-width: 360px;
+}
+.cal__cost-row {
+  display: contents;
+}
+.cal__cost-row span {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.cal__cost-row code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  background: transparent;
+  color: var(--ink-1);
+}
+.cal__cost-row--final span,
+.cal__cost-row--final code {
+  font-weight: 600;
+  color: var(--success);
+}
+.cal__cost-row--meta span,
+.cal__cost-row--meta code {
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.cal__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.cal__table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cal__table th.num,
+.cal__table td.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.cal__table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cal__table-fitted {
+  color: var(--success);
+  font-weight: 600;
+}
+.cal__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.cal__range-low,
+.cal__range-high {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.cal__range-bar {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+}
+.cal__range-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+.cal__range-marker--initial {
+  background: var(--ink-3);
+}
+.cal__range-marker--fitted {
+  background: var(--success);
+  width: 4px;
+  border-radius: 2px;
+  height: 14px;
+  top: -4px;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.cal-empty {
+  padding: 24px;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-align: center;
+}
+.cal-empty code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface-3);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+.cal-empty__example {
+  display: inline-block;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  color: var(--ink-1);
+}
+.cal-empty__hint {
+  margin-top: 12px;
+}
+
 /* ─── Reality Check panel ───────────────────────────────────────────────── */
 .checks {
   display: flex;

@@ -73,6 +73,10 @@ export const enum TokenKind {
   // Reference mode — `reference <Stock>: (t, v) (t, v) ...` declares the
   // expected/observed behaviour the model should reproduce.
   KwReference = 'KW_REFERENCE',
+  // Calibration — `calibrate: bounds <C> = [low, high]` fits constants
+  // against the model's reference modes via Nelder-Mead.
+  KwCalibrate = 'KW_CALIBRATE',
+  KwBounds = 'KW_BOUNDS',
   // Time configuration words. Treated as keywords because they introduce
   // statements (e.g. `StartTime = 0`) and must not collide with user identifiers.
   KwStartTime = 'KW_START_TIME',
@@ -108,6 +112,8 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ['at', TokenKind.KwAt],
   ['exogenous', TokenKind.KwExogenous],
   ['reference', TokenKind.KwReference],
+  ['calibrate', TokenKind.KwCalibrate],
+  ['bounds', TokenKind.KwBounds],
 ]);
 
 export interface Token {

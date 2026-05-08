@@ -58,3 +58,11 @@ reference Population:
     (50, 400)
     (75, 470)
     (100, 490)
+
+# ── Calibration ──────────────────────────────────────────────────────────
+# Fit BirthRate and CarryingCapacity to the reference points above via
+# Nelder-Mead. Defaults (BirthRate=0.05, CarryingCapacity=500) are already
+# close-ish but not optimal — the calibrate tab will tighten them.
+calibrate:
+    bounds BirthRate = [0.01, 0.2]
+    bounds CarryingCapacity = [100, 1500]

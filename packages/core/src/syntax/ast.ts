@@ -27,7 +27,8 @@ export type Stmt =
   | PlotStmt
   | LimitStmt
   | CheckStmt
-  | ReferenceStmt;
+  | ReferenceStmt
+  | CalibrateStmt;
 
 export interface NodeBase {
   readonly range: SourceRange;
@@ -195,6 +196,22 @@ export interface ReferenceStmt extends NodeBase {
   readonly kind: 'Reference';
   readonly target: QualifiedRef;
   readonly points: readonly ReferencePoint[];
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Calibration — fit a subset of constants so the simulation reproduces the
+// model's reference modes. One block per program (last wins); each `bounds`
+// line declares a free parameter and its allowed range.
+
+export interface CalibrationParam extends NodeBase {
+  readonly target: QualifiedRef;
+  readonly low: number;
+  readonly high: number;
+}
+
+export interface CalibrateStmt extends NodeBase {
+  readonly kind: 'Calibrate';
+  readonly params: readonly CalibrationParam[];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

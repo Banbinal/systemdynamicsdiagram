@@ -138,6 +138,17 @@ export interface ReferenceModeIR {
   readonly points: ReadonlyArray<{ readonly t: number; readonly v: number }>;
 }
 
+/** A single free parameter in the calibration block. */
+export interface CalibrateParamIR {
+  readonly fqn: string; // FQN of the constant being fitted
+  readonly low: number;
+  readonly high: number;
+}
+
+export interface CalibrateIR {
+  readonly params: readonly CalibrateParamIR[];
+}
+
 /**
  * The result of `compile(ast)`: ready for `simulate(program)`.
  *
@@ -167,6 +178,7 @@ export interface CompiledProgram {
   readonly flowInputs: readonly FlowInput[];
   readonly checks: readonly CheckIR[];
   readonly references: readonly ReferenceModeIR[];
+  readonly calibration: CalibrateIR | null;
   readonly diagnostics: readonly Diagnostic[];
   /** Total number of stock slots (including synthetic stocks from desugaring). */
   readonly stockCount: number;
