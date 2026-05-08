@@ -1,18 +1,8 @@
 name: Deploy web app to GitHub Pages
 
 on:
-  # Auto-deploy on every push to master that touches the web app or its deps.
   push:
     branches: [master]
-    paths:
-      - 'apps/web/**'
-      - 'packages/core/**'
-      - 'packages/cli/**'
-      - 'examples/v2/**'
-      - 'pnpm-workspace.yaml'
-      - 'pnpm-lock.yaml'
-      - 'tsconfig.base.json'
-      - '.github/workflows/pages.yml'
   # Manual trigger from the Actions tab.
   workflow_dispatch:
 
