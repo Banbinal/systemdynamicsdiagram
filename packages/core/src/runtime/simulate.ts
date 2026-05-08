@@ -56,6 +56,13 @@ export interface SimulationResult {
   readonly stocks: Readonly<Record<string, Float64Array>>;
   /** Calc series keyed by FQN. */
   readonly calcs: Readonly<Record<string, Float64Array>>;
+  /**
+   * Per-flow magnitude series, keyed by flow FQN. Each value is the sum of
+   * `|eff.expr|` over the flow's effects at that recorded step — i.e. the
+   * total amount of "matter" flowing through the bowtie. Used by the diagram
+   * to animate matter-flow arcs at a speed proportional to their rate.
+   */
+  readonly flows: Readonly<Record<string, Float64Array>>;
   /** Diagnostics produced during simulation (e.g. NaN aborts). */
   readonly diagnostics: readonly Diagnostic[];
   /** If the simulation aborted (e.g. NaN), the step index at which it stopped. */
@@ -160,8 +167,14 @@ export function simulate(
   const time = new Float64Array(recordedCount);
   const stockSeries: Record<string, Float64Array> = {};
   const calcSeries: Record<string, Float64Array> = {};
+  const flowSeries: Record<string, Float64Array> = {};
   for (const s of program.stocks) stockSeries[s.fqn] = new Float64Array(recordedCount);
   for (const c of program.calcs) calcSeries[c.fqn] = new Float64Array(recordedCount);
+  // Distinct flow FQNs (a single `flow` statement may contribute multiple
+  // effects with the same flowFqn — they're aggregated below).
+  const flowFqns = new Set<string>();
+  for (const eff of program.flowEffects) flowFqns.add(eff.flowFqn);
+  for (const fqn of flowFqns) flowSeries[fqn] = new Float64Array(recordedCount);
 
   // ─── Solver scratch ──────────────────────────────────────────────────
   const n = stocks.length;
@@ -204,7 +217,7 @@ export function simulate(
     diagnostics.push(nanDiagnostic(0, startTime));
     abortedAt = 0;
   } else {
-    record(time, stockSeries, calcSeries, program, stocks, calcs, startTime, recordedIdx);
+    record(time, stockSeries, calcSeries, flowSeries, program, constants, stocks, calcs, startTime, recordedIdx, stepStack);
     recordedIdx++;
   }
 
@@ -227,7 +240,7 @@ export function simulate(
       }
 
       if (step % recordEvery === 0) {
-        record(time, stockSeries, calcSeries, program, stocks, calcs, newT, recordedIdx);
+        record(time, stockSeries, calcSeries, flowSeries, program, constants, stocks, calcs, newT, recordedIdx, stepStack);
         recordedIdx++;
       }
     }
@@ -237,11 +250,13 @@ export function simulate(
   const finalTime = recordedIdx === recordedCount ? time : time.slice(0, recordedIdx);
   const finalStocks = trimSeries(stockSeries, recordedIdx, recordedCount);
   const finalCalcs = trimSeries(calcSeries, recordedIdx, recordedCount);
+  const finalFlows = trimSeries(flowSeries, recordedIdx, recordedCount);
 
   return {
     time: finalTime,
     stocks: finalStocks,
     calcs: finalCalcs,
+    flows: finalFlows,
     diagnostics,
     ...(abortedAt !== undefined ? { abortedAt } : {}),
   };
@@ -414,15 +429,28 @@ function record(
   time: Float64Array,
   stockSeries: Record<string, Float64Array>,
   calcSeries: Record<string, Float64Array>,
+  flowSeries: Record<string, Float64Array>,
   program: CompiledProgram,
+  constants: Float64Array,
   stocks: Float64Array,
   calcs: Float64Array,
   t: number,
   idx: number,
+  stack: Float64Array,
 ): void {
   time[idx] = t;
   for (const s of program.stocks) stockSeries[s.fqn]![idx] = stocks[s.slot]!;
   for (const c of program.calcs) calcSeries[c.fqn]![idx] = calcs[c.slot]!;
+  // Per-flow magnitude: sum of |eff.expr| across this flow's effects, evaluated
+  // against the canonical post-step state. Aggregated into the slot keyed by FQN.
+  // We zero the buffer first because the same flow can appear multiple times.
+  for (const fqn of Object.keys(flowSeries)) flowSeries[fqn]![idx] = 0;
+  const ctx = { constants, stocks, calcs, time: t, maps: program.maps };
+  for (const eff of program.flowEffects) {
+    const v = evalExpr(eff.expr, ctx, stack);
+    const arr = flowSeries[eff.flowFqn];
+    if (arr) arr[idx] = arr[idx]! + Math.abs(v);
+  }
 }
 
 function trimSeries(

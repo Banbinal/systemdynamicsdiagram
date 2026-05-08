@@ -1033,87 +1033,207 @@ a:hover {
   margin: 0;
   cursor: pointer;
 }
-.diagram-zoom {
+/* (Custom zoom controls removed — React Flow's <Controls/> takes over.) */
+
+/* ─── Diagram scrubber (time playhead) ──────────────────────────────────── */
+.diagram-scrubber {
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  margin-left: 16px;
+  max-width: 540px;
+}
+.diagram-scrubber__btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
   border-radius: 4px;
-  overflow: hidden;
   background: var(--surface);
-}
-.diagram-zoom__btn,
-.diagram-zoom__pct {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  background: transparent;
-  border: 0;
-  padding: 2px 8px;
   color: var(--ink-2);
+  font-size: 10px;
+  font-family: var(--font-mono);
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
-.diagram-zoom__btn {
-  font-size: 14px;
-  font-weight: 600;
-  width: 24px;
-}
-.diagram-zoom__pct {
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  min-width: 48px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.diagram-zoom__btn:hover,
-.diagram-zoom__pct:hover {
-  background: var(--surface-2, #F4EFE6);
+.diagram-scrubber__btn:hover {
+  background: var(--surface-2);
   color: var(--ink-1);
 }
+.diagram-scrubber__slider {
+  flex: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  height: 4px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.diagram-scrubber__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+.diagram-scrubber__slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+.diagram-scrubber__time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  min-width: 80px;
+  text-align: right;
+  white-space: nowrap;
+}
+/* React Flow stage — pan/zoom and selection are handled by the library. */
 .diagram-stage {
   position: relative;
   width: 100%;
   flex: 1;
   min-height: 360px;
-  overflow: hidden;
-  cursor: grab;
   background: var(--surface);
   border-radius: 4px;
+}
+.diagram-stage .react-flow__attribution {
+  display: none;
+}
+.diagram-stage .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.diagram-stage .react-flow__controls-button {
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--ink-2);
+}
+.diagram-stage .react-flow__controls-button:hover {
+  background: var(--surface-2);
+  color: var(--ink-1);
+}
+.diagram-stage .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* ─── Custom diagram nodes ──────────────────────────────────────────────── */
+/* Each node is a sized div containing an SVG shape (drawn by nodes.tsx) and
+   a centred HTML label on top. Sizes come from `lib/diagramSizing.ts` so the
+   shape always wraps the text with breathing room — no overflow, no clipping
+   of the stroke. */
+.rfn {
+  font-family: var(--font-sans);
+  user-select: none;
+}
+.rfn__svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+.rfn__label {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  /* Slight vertical optical adjust so descenders sit nicely inside diamonds. */
 }
-.diagram-stage--grabbing {
-  cursor: grabbing;
+
+/* Stock gauge percentage badge — small label in the top-right corner. */
+.rfn__gauge-pct {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  letter-spacing: 0;
 }
-/* The host is a transform wrapper for pan only. Flex centring on the stage
-   handles position when the SVG fits; when the SVG overflows (zoomed in
-   beyond fit), the user pans via the host's translate. Scale is NOT applied
-   in CSS — Diagram.tsx sets the SVG's intrinsic width/height so the browser
-   re-rasterises vectors crisply at every zoom level. */
-.diagram-host {
-  flex-shrink: 0;
+
+/* ─── Module group nodes ────────────────────────────────────────────────── */
+/* React Flow renders these underneath their children (set via `parentId`),
+   so events still reach the children. The group's only role is to draw a
+   labelled boundary that makes module structure legible at a glance. */
+.rfn-group {
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  background: rgba(250, 250, 247, 0.55);
+  position: relative;
   pointer-events: none;
 }
-.diagram-host > svg {
-  display: block;
-  pointer-events: auto;
-  overflow: visible;
+.rfn-group__label {
+  position: absolute;
+  top: 4px;
+  left: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  background: var(--bg);
+  padding: 0 6px;
+  border-radius: 2px;
+  pointer-events: none;
 }
-.diagram-host svg .nodeLabel {
-  font-family: var(--font-sans);
-  font-size: 13px;
-}
-.diagram-host svg .edgeLabel {
+
+/* ─── Custom edge labels ────────────────────────────────────────────────── */
+.rfe__label {
+  position: absolute;
+  pointer-events: all;
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
-  background: var(--surface);
-  padding: 1px 4px;
+  padding: 1px 6px;
   border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  line-height: 1.1;
 }
-.diagram-host svg .edgeLabel rect {
-  fill: var(--surface);
-  fill-opacity: 0.92;
+.rfe__label--pos {
+  color: #2E7D5C;
+  border-color: #2E7D5C66;
+}
+.rfe__label--neg {
+  color: #B23A2C;
+  border-color: #B23A2C66;
+}
+.rfe__label--unk {
+  color: #8E8C86;
+  border-color: var(--border);
+}
+
+/* Matter-flow animated dashes — "matter moving along the pipe" effect.
+   The duration is set inline by MatterEdge from the live flow rate. */
+@keyframes rfe-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
 }
 .diagram-empty,
 .diagram-error {

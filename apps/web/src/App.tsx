@@ -421,7 +421,7 @@ export function App() {
                 </div>
                 <div className="model-layout">
                   <div className="model-layout__diagram">
-                    <Diagram program={sim.program} />
+                    <Diagram program={sim.program} result={chartResult} />
                   </div>
                   <Loops program={sim.program} />
                 </div>
