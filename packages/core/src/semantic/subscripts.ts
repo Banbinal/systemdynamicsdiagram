@@ -169,6 +169,7 @@ export function expandSubscripts(ast: Program): SubscriptExpansionResult {
             expr: exprForElement(stmt.expr, ctx, stmt.name),
             range: stmt.range,
             ...(stmt.exogenous ? { exogenous: true } : {}),
+            ...(stmt.unitTokens ? { unitTokens: stmt.unitTokens } : {}),
           } satisfies ConstantStmt;
         });
       }
@@ -186,6 +187,7 @@ export function expandSubscripts(ast: Program): SubscriptExpansionResult {
             name: `${stmt.name}_${elem}`,
             init: exprForElement(stmt.init, ctx, stmt.name),
             range: stmt.range,
+            ...(stmt.unitTokens ? { unitTokens: stmt.unitTokens } : {}),
           } satisfies StockStmt;
         });
       }

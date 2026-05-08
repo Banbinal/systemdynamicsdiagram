@@ -29,6 +29,7 @@ import {
 } from '../semantic/deps.js';
 import { desugar } from '../semantic/desugar.js';
 import { expandSubscripts } from '../semantic/subscripts.js';
+import { checkUnits } from '../semantic/checkUnits.js';
 import { inferPolarities, signOfConstantExpr, type Polarity } from '../semantic/polarity.js';
 import { resolve } from '../semantic/resolver.js';
 import type { Symbol, SymbolTable } from '../semantic/symbols.js';
@@ -91,6 +92,16 @@ export function compile(ast: Program): CompileResult {
   // ─── 1. Resolve ─────────────────────────────────────────────────────────
   const r = resolve(ds.program);
   diagnostics.push(...r.diagnostics);
+
+  // ─── 1b. Dimensional consistency (warnings only) ───────────────────────
+  // Runs after resolve so refs are bound. Walks every expression bottom-up
+  // from declared `[unit]` annotations and emits SD0072/SD0073/SD0074
+  // warnings on mismatches. Pure annotation — no impact on simulation.
+  diagnostics.push(...checkUnits({
+    ast: ds.program,
+    resolvedRefs: r.resolvedRefs,
+    stmtSymbols: r.stmtSymbols,
+  }));
 
   // ─── 2. Flatten the AST into typed buckets ─────────────────────────────
   const buckets = collectStmts(ds.program);

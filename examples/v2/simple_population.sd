@@ -7,11 +7,11 @@ StartTime = 0
 EndTime = 100
 TimeStep = 0.25
 
-stock Population = 100
+stock Population = 100 [people]
 
-constant BirthRate = 0.05
-constant DeathRate = 0.02
-constant CarryingCapacity = 500
+constant BirthRate = 0.05 [1/year]
+constant DeathRate = 0.02 [1/year]
+constant CarryingCapacity = 500 [people]
 
 calc PopulationPressure = Population / CarryingCapacity
 calc ActualBirthRate = BirthRate * (1 - PopulationPressure * 0.7)

@@ -35,6 +35,17 @@ export interface NodeBase {
   readonly range: SourceRange;
 }
 
+/**
+ * One token of a unit annotation. The parser collects these between the
+ * `[` and `]` of a `[unit-expr]` block; `units.ts` interprets them.
+ */
+export interface UnitTokenAst {
+  readonly kind: 'ident' | 'number' | 'star' | 'slash' | 'caret';
+  readonly text: string;
+  readonly value?: number;
+  readonly range: SourceRange;
+}
+
 export type TimeConfigKey = 'StartTime' | 'EndTime' | 'TimeStep';
 
 export interface TimeConfigStmt extends NodeBase {
@@ -61,6 +72,12 @@ export interface ConstantStmt extends NodeBase {
   readonly exogenous?: boolean;
   /** Subscript dimension name when declared `constant X[Sub] = ...`. */
   readonly subscript?: string;
+  /**
+   * Optional units annotation `[unit-expr]` written after the value.
+   * Example: `constant BirthRate = 0.05 [1/year]`. Stored as the
+   * sequence of unit tokens so the units module parses it lazily.
+   */
+  readonly unitTokens?: readonly UnitTokenAst[];
 }
 
 export interface StockStmt extends NodeBase {
@@ -77,6 +94,8 @@ export interface StockStmt extends NodeBase {
   readonly delayKind?: 'smooth' | 'delay3';
   /** Subscript dimension name when declared `stock X[Sub] = ...`. */
   readonly subscript?: string;
+  /** Optional units annotation `[unit-expr]` written after the init value. */
+  readonly unitTokens?: readonly UnitTokenAst[];
 }
 
 export interface CalcStmt extends NodeBase {

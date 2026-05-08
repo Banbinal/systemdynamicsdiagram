@@ -49,6 +49,7 @@ import type {
   ReferencePoint,
   ReferenceStmt,
   SubscriptStmt,
+  UnitTokenAst,
   ScenarioOverride,
   ScenarioStmt,
   Stmt,
@@ -230,6 +231,7 @@ class Parser {
       this.recoverToNewline();
       return null;
     }
+    const unitTokens = this.maybeUnitsBracket();
     this.consumeNewline();
     const base = {
       kind: 'Constant' as const,
@@ -241,7 +243,50 @@ class Parser {
       ...base,
       ...(exogenous ? { exogenous: true } : {}),
       ...(subscript ? { subscript } : {}),
+      ...(unitTokens ? { unitTokens } : {}),
     };
+  }
+
+  /**
+   * Parse `[unit-expr]` after a constant/stock value. Returns the inside
+   * tokens as `UnitTokenAst[]` if a bracket follows on the same line, else
+   * null. The lexer's tokens (`Ident`, `Number`, `Star`, `Slash`, `Caret`)
+   * are reinterpreted in unit context (no math).
+   */
+  private maybeUnitsBracket(): UnitTokenAst[] | null {
+    if (this.peek().kind !== TokenKind.LBracket) return null;
+    this.advance(); // [
+    const out: UnitTokenAst[] = [];
+    while (this.peek().kind !== TokenKind.RBracket && !this.isAtEnd()) {
+      const t = this.advance();
+      switch (t.kind) {
+        case TokenKind.Ident:
+          out.push({ kind: 'ident', text: t.text, range: t.range });
+          break;
+        case TokenKind.Number:
+          out.push({ kind: 'number', text: t.text, value: t.value!, range: t.range });
+          break;
+        case TokenKind.Star:
+          out.push({ kind: 'star', text: '*', range: t.range });
+          break;
+        case TokenKind.Slash:
+          out.push({ kind: 'slash', text: '/', range: t.range });
+          break;
+        case TokenKind.Caret:
+          out.push({ kind: 'caret', text: '^', range: t.range });
+          break;
+        default:
+          this.diag(
+            'error',
+            'SD0070',
+            `Unexpected '${t.text}' inside unit expression. Allowed: identifiers, *, /, ^, integers.`,
+            t.range,
+          );
+          break;
+      }
+    }
+    this.expect(TokenKind.RBracket);
+    return out;
   }
 
   /** Parse `[Ident]` after a declaration name or qualified ref. Returns null if
@@ -308,6 +353,7 @@ class Parser {
     if (!this.expect(TokenKind.Eq)) { this.recoverToNewline(); return null; }
     const init = this.parseExpression();
     if (!init) { this.recoverToNewline(); return null; }
+    const unitTokens = this.maybeUnitsBracket();
     this.consumeNewline();
     return {
       kind: 'Stock',
@@ -315,6 +361,7 @@ class Parser {
       init,
       range: { start: kw.range.start, end: init.range.end },
       ...(subscript ? { subscript } : {}),
+      ...(unitTokens ? { unitTokens } : {}),
     };
   }
 
