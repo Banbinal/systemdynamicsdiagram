@@ -1,0 +1,23 @@
+{
+  "skill_name": "system-dynamics-diagram",
+  "evals": [
+    {
+      "id": 0,
+      "name": "deer-population-with-shocks",
+      "prompt": "Modélise la population de cerfs dans une réserve. Croissance naturelle ~10%/an, capacité de la réserve ~5000 cerfs, et un hiver rude tous les 8 ans qui tue ~15% de la population. Je veux voir comment le pic se stabilise sur 50 ans, et tester un scénario où la capacité est plus élevée (réserve agrandie).",
+      "expected_output": "An .sd model with: (a) one stock for the deer population, (b) a logistic growth flow using carrying capacity, (c) a recurring mortality event (probably approximated by a single pulse or scenario with shock magnitude), (d) at least one scenario for the larger reserve, (e) appropriate StartTime/EndTime/TimeStep, (f) a share URL produced by sign_share.mjs."
+    },
+    {
+      "id": 1,
+      "name": "bank-capital-feedback-loop",
+      "prompt": "J'aimerais simuler une banque qui fait des prêts. Plus elle a de capital, plus elle peut prêter, ce qui génère plus de revenus d'intérêts qui retournent au capital. Mais il y a un taux de défaut sur les prêts. Que se passe-t-il sur 20 ans avec un capital initial de 10M€, un taux de prêt de 5%/an, et un taux de défaut de 1%/an ? Et si on faisait varier le taux de défaut ?",
+      "expected_output": "An .sd model with: (a) at least one stock (Capital, possibly also LoanPortfolio), (b) a flow representing interest income that depends on capital → reinforcing loop, (c) a flow representing defaults, (d) a sweep or scenario varying the default rate, (e) appropriate time horizon (~20 years), (f) a share URL."
+    },
+    {
+      "id": 2,
+      "name": "restaurant-staffing-delays",
+      "prompt": "Je gère un restaurant. Quand la demande monte, j'embauche, mais former un cuisinier prend 3 mois. Si la demande chute, je peux pas licencier instantanément (préavis de 1 mois). Je veux voir l'effet de différentes vitesses d'embauche sur la qualité du service quand la demande fluctue. La demande de base est ~100 couverts/jour, avec un saut à 150 au bout de 6 mois.",
+      "expected_output": "An .sd model with: (a) a stock for active staff, (b) a stock or smooth/delay3 for the hiring pipeline (3-month training delay), (c) a flow for departures with the 1-month notice as a delay or adjustment time, (d) a calc for desired staffing tied to demand (using step for the demand jump), (e) some kind of service-quality calc, (f) a sweep or scenario varying the hiring-aggressiveness parameter, (g) a share URL."
+    }
+  ]
+}

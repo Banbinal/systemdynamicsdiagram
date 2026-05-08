@@ -19,6 +19,7 @@ import { Diagram } from './components/Diagram.tsx';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
+import { Docs } from './components/Docs.tsx';
 
 const SERIES_COLORS = [
   'var(--series-1)',
@@ -32,6 +33,9 @@ const SERIES_COLORS = [
 ];
 
 type Tab = 'model' | 'simulation' | 'compare' | 'data';
+type View = 'workbench' | 'docs';
+
+const SKILL_ZIP_HREF = `${import.meta.env.BASE_URL}system-dynamics-diagram.zip`;
 
 function shortName(fqn: string): string {
   const i = fqn.lastIndexOf('.');
@@ -53,6 +57,7 @@ export function App() {
   );
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   const [tab, setTab] = useState<Tab>('model');
+  const [view, setView] = useState<View>('workbench');
   const [toasts, setToasts] = useState<readonly ToastMsg[]>([]);
   const [printing, setPrinting] = useState<PrintingState>('off');
 
@@ -178,6 +183,20 @@ export function App() {
     }
   }, [source, active.id, pushToast]);
 
+  // ── Skill download ───────────────────────────────────────────────────────
+  // The zip is generated at build time by scripts/build-skill-zip.mjs and
+  // served as a static asset. We trigger the download via a transient anchor
+  // rather than navigating away from the SPA.
+  const handleDownloadSkill = useCallback(() => {
+    const a = document.createElement('a');
+    a.href = SKILL_ZIP_HREF;
+    a.download = 'system-dynamics-diagram.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    pushToast('Downloading skill bundle…', 'ok');
+  }, [pushToast]);
+
   // ── PDF export ───────────────────────────────────────────────────────────
   const handleExportPdf = useCallback(() => {
     if (sim.status === 'error') {
@@ -217,6 +236,15 @@ export function App() {
   }, [sim.program]);
   const canCompare = variationCount > 1 && sim.program !== null;
 
+  if (view === 'docs') {
+    return (
+      <Docs
+        onClose={() => setView('workbench')}
+        onDownload={handleDownloadSkill}
+      />
+    );
+  }
+
   return (
     <>
     <div className="app">
@@ -230,6 +258,8 @@ export function App() {
         onShare={handleShare}
         onExportPdf={handleExportPdf}
         isExporting={printing !== 'off'}
+        onOpenDocs={() => setView('docs')}
+        onDownloadSkill={handleDownloadSkill}
       />
 
       <div className="main">

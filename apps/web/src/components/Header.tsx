@@ -11,6 +11,8 @@ interface HeaderProps {
   readonly onShare: () => void;
   readonly onExportPdf: () => void;
   readonly isExporting: boolean;
+  readonly onOpenDocs: () => void;
+  readonly onDownloadSkill: () => void;
 }
 
 const STATUS_LABEL: Record<SimStatus, string> = {
@@ -30,6 +32,8 @@ export function Header({
   onShare,
   onExportPdf,
   isExporting,
+  onOpenDocs,
+  onDownloadSkill,
 }: HeaderProps) {
   return (
     <header className="header">
@@ -102,6 +106,28 @@ export function Header({
         <DownloadIcon />
         {isExporting ? 'Preparing…' : 'Export PDF'}
       </button>
+
+      <div className="header__sep" />
+
+      <button
+        type="button"
+        className="btn btn--ghost"
+        onClick={onOpenDocs}
+        title="Open the documentation"
+      >
+        <BookIcon />
+        Docs
+      </button>
+
+      <button
+        type="button"
+        className="btn btn--ghost"
+        onClick={onDownloadSkill}
+        title="Download the Claude Code skill bundle as a zip"
+      >
+        <ZipIcon />
+        Skill (.zip)
+      </button>
     </header>
   );
 }
@@ -124,6 +150,26 @@ function DownloadIcon() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function BookIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  );
+}
+
+function ZipIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="12" y1="11" x2="12" y2="17" />
+      <line x1="10" y1="14" x2="14" y2="14" />
     </svg>
   );
 }
