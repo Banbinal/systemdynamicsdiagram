@@ -23,6 +23,8 @@ import { Tweak } from './components/Tweak.tsx';
 import { Checks } from './components/Checks.tsx';
 import { PhasePlot } from './components/PhasePlot.tsx';
 import { Tornado } from './components/Tornado.tsx';
+import { importXmile } from './lib/xmileImport.ts';
+import { exportXmile } from './lib/xmileExport.ts';
 import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
@@ -321,6 +323,72 @@ export function App() {
     pushToast('Downloading skill bundle…', 'ok');
   }, [pushToast]);
 
+  // ── XMILE import / export ────────────────────────────────────────────────
+  // Imported XMILE replaces the current model's source. The user keeps the
+  // ability to flip back to the canned examples via the picker.
+  const handleImportXmile = useCallback(
+    (file: File) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const xml = String(reader.result ?? '');
+        const { dsl, warnings } = importXmile(xml);
+        if (!dsl) {
+          pushToast(
+            'Could not import XMILE: ' + (warnings[0] ?? 'unknown error'),
+            'error',
+          );
+          return;
+        }
+        setSources((prev) => ({ ...prev, [active.id]: dsl }));
+        const warnMsg = warnings.length > 0
+          ? ` (${warnings.length} warning${warnings.length === 1 ? '' : 's'} — see editor comments).`
+          : '.';
+        pushToast(`Imported XMILE into ${active.title}${warnMsg}`, warnings.length > 0 ? 'info' : 'ok');
+        if (warnings.length > 0) {
+          // eslint-disable-next-line no-console
+          console.warn('[XMILE import]', warnings);
+        }
+      };
+      reader.onerror = () => {
+        pushToast('Failed to read the file.', 'error');
+      };
+      reader.readAsText(file);
+    },
+    [active.id, active.title, pushToast],
+  );
+
+  const handleExportXmile = useCallback(() => {
+    if (!source.trim()) {
+      pushToast('Nothing to export — source is empty.', 'error');
+      return;
+    }
+    const { xml, warnings } = exportXmile(source, active.title);
+    if (!xml) {
+      pushToast(
+        'Could not export XMILE: ' + (warnings[0] ?? 'parse error'),
+        'error',
+      );
+      return;
+    }
+    const blob = new Blob([xml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${active.id}.xmile`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    const warnMsg = warnings.length > 0
+      ? ` (${warnings.length} feature${warnings.length === 1 ? '' : 's'} not representable in XMILE — see console).`
+      : '.';
+    pushToast(`Exported as ${active.id}.xmile${warnMsg}`, warnings.length > 0 ? 'info' : 'ok');
+    if (warnings.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn('[XMILE export]', warnings);
+    }
+  }, [source, active.id, active.title, pushToast]);
+
   // ── PDF export ───────────────────────────────────────────────────────────
   const handleExportPdf = useCallback(() => {
     if (sim.status === 'error') {
@@ -385,6 +453,8 @@ export function App() {
           isExporting={printing !== 'off'}
           onOpenDocs={() => setView('docs')}
           onDownloadSkill={handleDownloadSkill}
+          onImportXmile={handleImportXmile}
+          onExportXmile={handleExportXmile}
         />
       )}
 

@@ -13,6 +13,8 @@ interface HeaderProps {
   readonly isExporting: boolean;
   readonly onOpenDocs: () => void;
   readonly onDownloadSkill: () => void;
+  readonly onImportXmile: (file: File) => void;
+  readonly onExportXmile: () => void;
 }
 
 const STATUS_LABEL: Record<SimStatus, string> = {
@@ -34,6 +36,8 @@ export function Header({
   isExporting,
   onOpenDocs,
   onDownloadSkill,
+  onImportXmile,
+  onExportXmile,
 }: HeaderProps) {
   return (
     <header className="header">
@@ -107,6 +111,36 @@ export function Header({
         {isExporting ? 'Preparing…' : 'Export PDF'}
       </button>
 
+      <label
+        className="btn btn--ghost"
+        title="Import a Stella / Insight Maker / Simlin model (.xmile, .stmx, .xml)"
+        style={{ cursor: 'pointer' }}
+      >
+        <UploadIcon />
+        Import XMILE
+        <input
+          type="file"
+          accept=".xmile,.stmx,.xml,application/xml,text/xml"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onImportXmile(f);
+            // Reset so picking the same file twice fires onChange.
+            e.currentTarget.value = '';
+          }}
+        />
+      </label>
+
+      <button
+        type="button"
+        className="btn btn--ghost"
+        onClick={onExportXmile}
+        title="Export the current model as XMILE for Stella / Insight Maker / Simlin"
+      >
+        <DownloadIcon />
+        Export XMILE
+      </button>
+
       <div className="header__sep" />
 
       <button
@@ -150,6 +184,16 @@ function DownloadIcon() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }
