@@ -24,10 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Don't pass `version` here — pnpm/action-setup@v4 refuses if it conflicts
+      # with the `packageManager` field in package.json. We set it once in
+      # package.json (currently `pnpm@10.29.1`).
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
