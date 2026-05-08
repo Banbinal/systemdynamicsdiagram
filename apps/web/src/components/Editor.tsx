@@ -47,11 +47,11 @@ export function Editor({ value, onChange, onAiAssist }: EditorProps) {
           type="button"
           className="editor-ai-btn"
           onClick={onAiAssist}
-          title="Générer un modèle avec Gemini Flash"
-          aria-label="Assistant IA"
+          title="Generate a model with Gemini Flash"
+          aria-label="AI assistant"
         >
           <SparkleIcon />
-          <span>IA</span>
+          <span>AI</span>
         </button>
       )}
     </div>

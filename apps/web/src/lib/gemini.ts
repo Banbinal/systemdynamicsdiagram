@@ -1,20 +1,26 @@
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
+export type GenerateMode = 'create' | 'modify';
+
 export interface GenerateOpts {
   readonly apiKey: string;
   readonly userPrompt: string;
   readonly skillContext: string;
+  readonly mode: GenerateMode;
+  /** Required when `mode === 'modify'`. The current editor source the model edits. */
+  readonly currentSource?: string;
   readonly signal?: AbortSignal;
 }
 
 export async function generateSdSource(opts: GenerateOpts): Promise<string> {
   const url = `${GEMINI_ENDPOINT}?key=${encodeURIComponent(opts.apiKey)}`;
+  const userMessage = buildUserMessage(opts);
   const body = {
     systemInstruction: {
-      parts: [{ text: buildSystemPrompt(opts.skillContext) }],
+      parts: [{ text: buildSystemPrompt(opts.skillContext, opts.mode) }],
     },
-    contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
+    contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     generationConfig: {
       temperature: 0.4,
       maxOutputTokens: 8192,
@@ -52,8 +58,13 @@ export async function generateSdSource(opts: GenerateOpts): Promise<string> {
   return extractDsl(text);
 }
 
-function buildSystemPrompt(skillContext: string): string {
-  return `You are an expert in the System Dynamics Diagram v2 DSL. The user is interacting with a web simulator and will describe a system they want to model. Translate their description into a runnable .sd source.
+function buildSystemPrompt(skillContext: string, mode: GenerateMode): string {
+  const taskLine =
+    mode === 'modify'
+      ? 'The user is interacting with a web simulator and will describe a change to apply to an existing .sd model. Apply the change and return the FULL updated source — do not omit anything.'
+      : 'The user is interacting with a web simulator and will describe a system they want to model. Translate their description into a runnable .sd source.';
+
+  return `You are an expert in the System Dynamics Diagram v2 DSL. ${taskLine}
 
 Output rules — mandatory:
 - Output ONLY a valid .sd source. No prose, no headings, no commentary.
@@ -65,6 +76,20 @@ Output rules — mandatory:
 Reference documentation follows. Treat it as authoritative.
 
 ${skillContext}`;
+}
+
+function buildUserMessage(opts: GenerateOpts): string {
+  if (opts.mode === 'modify' && opts.currentSource && opts.currentSource.trim()) {
+    return `Apply the requested change to the model below. Return the full updated .sd source.
+
+=== Existing model ===
+${opts.currentSource.trim()}
+=== End existing model ===
+
+Requested change:
+${opts.userPrompt}`;
+  }
+  return opts.userPrompt;
 }
 
 function extractDsl(raw: string): string {

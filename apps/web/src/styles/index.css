@@ -1243,6 +1243,37 @@ a:hover {
   line-height: 1.5;
 }
 
+/* ─── Segmented control ──────────────────────────────────────────────────── */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2px;
+  background: var(--surface-2);
+  gap: 2px;
+  align-self: flex-start;
+}
+.segmented__opt {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 4px;
+  color: var(--ink-2);
+  transition: background 120ms ease, color 120ms ease;
+}
+.segmented__opt:hover:not(:disabled):not(.segmented__opt--on) {
+  background: var(--surface);
+  color: var(--ink-1);
+}
+.segmented__opt--on {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+.segmented__opt:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ─── Toast ──────────────────────────────────────────────────────────────── */
 .toast-stack {
   position: fixed;

@@ -416,10 +416,11 @@ export function App() {
 
       {aiOpen && (
         <AiAssistModal
+          currentSource={source}
           onClose={() => setAiOpen(false)}
           onApply={(generated) => {
             setSources((prev) => ({ ...prev, [active.id]: generated }));
-            pushToast('Modèle généré et inséré dans l’éditeur.', 'ok');
+            pushToast('Model generated and inserted into the editor.', 'ok');
           }}
         />
       )}
