@@ -20,6 +20,7 @@ import { Compare } from './components/Compare.tsx';
 import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
 import { Docs } from './components/Docs.tsx';
+import { AiAssistModal } from './components/AiAssistModal.tsx';
 
 const SERIES_COLORS = [
   'var(--series-1)',
@@ -60,6 +61,7 @@ export function App() {
   const [view, setView] = useState<View>('workbench');
   const [toasts, setToasts] = useState<readonly ToastMsg[]>([]);
   const [printing, setPrinting] = useState<PrintingState>('off');
+  const [aiOpen, setAiOpen] = useState(false);
 
   const pushToast = useCallback((text: string, kind: ToastKind = 'ok') => {
     setToasts((prev) => [...prev, { id: Date.now() + Math.random(), text, kind }]);
@@ -292,7 +294,11 @@ export function App() {
           ) : null}
 
           <div className="editor-host">
-            <Editor value={source} onChange={handleEdit} />
+            <Editor
+              value={source}
+              onChange={handleEdit}
+              onAiAssist={() => setAiOpen(true)}
+            />
           </div>
         </section>
 
@@ -401,6 +407,16 @@ export function App() {
           </div>
         </section>
       </div>
+
+      {aiOpen && (
+        <AiAssistModal
+          onClose={() => setAiOpen(false)}
+          onApply={(generated) => {
+            setSources((prev) => ({ ...prev, [active.id]: generated }));
+            pushToast('Modèle généré et inséré dans l’éditeur.', 'ok');
+          }}
+        />
+      )}
 
       {/* Toast stack — fixed-positioned, hidden in print via @media print */}
       {toasts.length > 0 && (

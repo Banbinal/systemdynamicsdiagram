@@ -386,6 +386,7 @@ a:hover {
 
 /* ─── Editor host ────────────────────────────────────────────────────────── */
 .editor-host {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -398,6 +399,40 @@ a:hover {
 }
 .cm-editor {
   height: 100% !important;
+}
+
+/* ─── AI overlay button (top-right of editor) ────────────────────────────── */
+.editor-ai-btn {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px rgba(15, 76, 92, 0.06);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
+    transform 120ms ease;
+}
+.editor-ai-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+.editor-ai-btn:active {
+  transform: translateY(1px);
+}
+.editor-ai-btn:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
 }
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
@@ -812,6 +847,161 @@ a:hover {
   color: var(--ink-3);
   font-size: 13px;
   text-align: center;
+}
+
+/* ─── Modal (AI assistant) ───────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(31, 31, 31, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  animation: modal-backdrop-in 160ms ease;
+}
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.18),
+    0 4px 12px rgba(0, 0, 0, 0.10);
+  animation: modal-in 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.modal__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-1);
+  letter-spacing: 0.01em;
+}
+.modal__sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+.modal__close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.modal__close:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--ink-1);
+}
+.modal__close:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.modal__body {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+.modal__error {
+  background: var(--error-soft);
+  color: var(--error);
+  border: 1px solid rgba(178, 58, 44, 0.28);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+/* ─── Form rows (used inside modal) ──────────────────────────────────────── */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-row__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.form-row__input,
+.form-row__textarea {
+  font: inherit;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-1);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.form-row__textarea {
+  font-family: var(--font-sans);
+  resize: vertical;
+  min-height: 110px;
+}
+.form-row__input:focus,
+.form-row__textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+.form-row__input:disabled,
+.form-row__textarea:disabled {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.form-row__hint {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
 }
 
 /* ─── Toast ──────────────────────────────────────────────────────────────── */
