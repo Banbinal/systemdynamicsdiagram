@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 
 import type { CompiledProgram } from '@sysdyn/core';
@@ -34,36 +34,57 @@ function ensureMermaid() {
 
 let renderSeq = 0;
 
-const MIN_SCALE = 0.4;
-const MAX_SCALE = 4;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 6;
 const ZOOM_STEP = 1.25;
+const STAGE_PADDING = 24;
 
 interface DiagramProps {
   readonly program: CompiledProgram | null;
 }
 
-interface Transform {
-  scale: number;
-  x: number;
-  y: number;
+interface Pan {
+  readonly x: number;
+  readonly y: number;
 }
 
-const IDENTITY: Transform = { scale: 1, x: 0, y: 0 };
+const ORIGIN: Pan = { x: 0, y: 0 };
 
 export function Diagram({ program }: DiagramProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAux, setShowAux] = useState(true);
-  const [t, setT] = useState<Transform>(IDENTITY);
+  // zoom is a multiplier on top of the fit-to-stage scale: 1 means "fit",
+  // 2 means "twice as large as fit", etc. The `100%` toolbar button resets to 1.
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<Pan>(ORIGIN);
 
-  // Reset zoom/pan when the model itself changes (but keep it across an
-  // auxiliary-toggle, since the same diagram is just gaining/losing nodes).
+  // Per-render baselines, kept in refs so applyAll can read them without
+  // pulling them into effect dependency arrays.
+  const baseSizeRef = useRef<{ w: number; h: number } | null>(null);
+  const fitScaleRef = useRef(1);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
+  // Recompute the fit scale (stage / baseline) and resize the SVG accordingly.
+  // Uses zoomRef so it doesn't need to be in any effect's deps.
+  const applyAll = useCallback(() => {
+    const svg = innerRef.current?.querySelector('svg');
+    if (!svg || !baseSizeRef.current) return;
+    fitScaleRef.current = computeFitScale(stageRef.current, baseSizeRef.current);
+    applyScale(svg, baseSizeRef.current, fitScaleRef.current * zoomRef.current);
+  }, []);
+
+  // Reset zoom + pan when the model itself changes (preserved across an
+  // auxiliary-toggle since the same diagram is just gaining/losing nodes).
   useEffect(() => {
-    setT(IDENTITY);
+    setZoom(1);
+    setPan(ORIGIN);
   }, [program]);
 
-  // Render the Mermaid SVG into innerRef whenever the program or aux toggle changes.
+  // Render Mermaid into innerRef. Only re-renders on program or aux change —
+  // never on zoom, which would redo the (expensive) layout pass for nothing.
   useEffect(() => {
     ensureMermaid();
     if (!program || !innerRef.current) return;
@@ -77,7 +98,17 @@ export function Diagram({ program }: DiagramProps) {
       .then(({ svg }) => {
         if (cancelled || !innerRef.current) return;
         innerRef.current.innerHTML = svg;
+        // Mermaid sets `style="max-width:Xpx"` on the root SVG — strip both the
+        // inline cap and the width/height attributes so applyScale wins.
+        const svgEl = innerRef.current.querySelector('svg');
+        if (svgEl) {
+          svgEl.style.maxWidth = 'none';
+          svgEl.removeAttribute('width');
+          svgEl.removeAttribute('height');
+        }
+        baseSizeRef.current = readSvgBaseSize(svgEl);
         setError(null);
+        applyAll();
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -87,66 +118,50 @@ export function Diagram({ program }: DiagramProps) {
     return () => {
       cancelled = true;
     };
-  }, [program, showAux]);
+  }, [program, showAux, applyAll]);
 
-  // Zoom anchored on cursor position.
-  const zoomAt = useCallback((factor: number, anchorX: number, anchorY: number) => {
-    setT((prev) => {
-      const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, prev.scale * factor));
-      if (newScale === prev.scale) return prev;
-      // Keep the point under the cursor stable: compute the shift needed in
-      // the translation to compensate for the scale change at the anchor.
-      const k = newScale / prev.scale;
-      const x = anchorX - k * (anchorX - prev.x);
-      const y = anchorY - k * (anchorY - prev.y);
-      return { scale: newScale, x, y };
-    });
+  // Re-apply on zoom change (no Mermaid re-render).
+  useLayoutEffect(() => {
+    applyAll();
+  }, [zoom, applyAll]);
+
+  // Re-fit on stage resize (window resize, sidebar collapses, font reflow).
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const obs = new ResizeObserver(() => applyAll());
+    obs.observe(stage);
+    return () => obs.disconnect();
+  }, [applyAll]);
+
+  // ── Wheel-to-zoom (no modifier needed; the diagram owns its pane). ──────
+  const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setZoom((z) => clamp(z * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP), MIN_ZOOM, MAX_ZOOM));
   }, []);
 
-  const onWheel = useCallback(
-    (e: React.WheelEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const stage = stageRef.current;
-      if (!stage) return;
-      const rect = stage.getBoundingClientRect();
-      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-      zoomAt(factor, e.clientX - rect.left, e.clientY - rect.top);
-    },
-    [zoomAt],
-  );
-
-  // Drag-to-pan.
+  // ── Drag-to-pan ──────────────────────────────────────────────────────────
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(
     null,
   );
-  const onMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      baseX: t.x,
-      baseY: t.y,
-    };
-  }, [t.x, t.y]);
+  const [grabbing, setGrabbing] = useState(false);
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: pan.x, baseY: pan.y };
+      setGrabbing(true);
+    },
+    [pan.x, pan.y],
+  );
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const d = dragRef.current;
     if (!d) return;
-    setT((prev) => ({ ...prev, x: d.baseX + (e.clientX - d.startX), y: d.baseY + (e.clientY - d.startY) }));
+    setPan({ x: d.baseX + (e.clientX - d.startX), y: d.baseY + (e.clientY - d.startY) });
   }, []);
   const endDrag = useCallback(() => {
     dragRef.current = null;
+    setGrabbing(false);
   }, []);
-
-  // Toolbar actions zoom around the centre of the stage.
-  const zoomCentered = useCallback(
-    (factor: number) => {
-      const stage = stageRef.current;
-      if (!stage) return;
-      const rect = stage.getBoundingClientRect();
-      zoomAt(factor, rect.width / 2, rect.height / 2);
-    },
-    [zoomAt],
-  );
 
   if (!program) {
     return <div className="diagram-empty">— compile a model to see its diagram —</div>;
@@ -160,9 +175,7 @@ export function Diagram({ program }: DiagramProps) {
     );
   }
 
-  const pct = Math.round(t.scale * 100);
-  const transform = `translate(${t.x}px, ${t.y}px) scale(${t.scale})`;
-
+  const pct = Math.round(zoom * 100);
   return (
     <div className="diagram-wrap">
       <div className="diagram-toolbar">
@@ -178,7 +191,7 @@ export function Diagram({ program }: DiagramProps) {
           <button
             type="button"
             className="diagram-zoom__btn"
-            onClick={() => zoomCentered(1 / ZOOM_STEP)}
+            onClick={() => setZoom((z) => clamp(z / ZOOM_STEP, MIN_ZOOM, MAX_ZOOM))}
             title="Zoom out"
             aria-label="Zoom out"
           >
@@ -187,15 +200,18 @@ export function Diagram({ program }: DiagramProps) {
           <button
             type="button"
             className="diagram-zoom__pct"
-            onClick={() => setT(IDENTITY)}
-            title="Reset to 100%"
+            onClick={() => {
+              setZoom(1);
+              setPan(ORIGIN);
+            }}
+            title="Reset to fit"
           >
             {pct}%
           </button>
           <button
             type="button"
             className="diagram-zoom__btn"
-            onClick={() => zoomCentered(ZOOM_STEP)}
+            onClick={() => setZoom((z) => clamp(z * ZOOM_STEP, MIN_ZOOM, MAX_ZOOM))}
             title="Zoom in"
             aria-label="Zoom in"
           >
@@ -205,7 +221,7 @@ export function Diagram({ program }: DiagramProps) {
       </div>
       <div
         ref={stageRef}
-        className={'diagram-stage' + (dragRef.current ? ' diagram-stage--grabbing' : '')}
+        className={'diagram-stage' + (grabbing ? ' diagram-stage--grabbing' : '')}
         onWheel={onWheel}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -215,10 +231,51 @@ export function Diagram({ program }: DiagramProps) {
         <div
           ref={innerRef}
           className="diagram-host"
-          style={{ transform, transformOrigin: '0 0' }}
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
           aria-label="Stock-and-flow diagram"
         />
       </div>
     </div>
   );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function readSvgBaseSize(svg: SVGSVGElement | null): { w: number; h: number } | null {
+  if (!svg) return null;
+  const vb = svg.viewBox.baseVal;
+  if (vb && vb.width > 0 && vb.height > 0) return { w: vb.width, h: vb.height };
+  const bb = svg.getBBox();
+  if (bb.width > 0 && bb.height > 0) return { w: bb.width, h: bb.height };
+  return null;
+}
+
+function computeFitScale(
+  stage: HTMLDivElement | null,
+  base: { w: number; h: number } | null,
+): number {
+  if (!stage || !base) return 1;
+  const r = stage.getBoundingClientRect();
+  const availW = Math.max(1, r.width - STAGE_PADDING * 2);
+  const availH = Math.max(1, r.height - STAGE_PADDING * 2);
+  return Math.max(0.05, Math.min(availW / base.w, availH / base.h));
+}
+
+function applyScale(
+  svg: SVGSVGElement | null,
+  base: { w: number; h: number } | null,
+  scale: number,
+): void {
+  if (!svg || !base) return;
+  const w = base.w * scale;
+  const h = base.h * scale;
+  svg.setAttribute('width', String(w));
+  svg.setAttribute('height', String(h));
+  svg.style.width = `${w}px`;
+  svg.style.height = `${h}px`;
+  svg.style.maxWidth = 'none';
 }

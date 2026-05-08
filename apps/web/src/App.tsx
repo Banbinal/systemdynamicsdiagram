@@ -354,7 +354,7 @@ export function App() {
 
           <div className="tab-content" role="tabpanel">
             {tab === 'model' && (
-              <div className="card">
+              <div className="card card--fill">
                 <div className="card__title">
                   <h3 className="card__title-text">Stock-and-flow diagram</h3>
                   <span className="card__title-sub">{active.title}</span>

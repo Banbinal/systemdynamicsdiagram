@@ -499,6 +499,8 @@ a:hover {
   overflow: auto;
   padding: 20px;
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
 }
 
 /* ─── Chart ──────────────────────────────────────────────────────────────── */
@@ -684,19 +686,33 @@ a:hover {
 }
 
 /* ─── Model layout (diagram + loops sidebar) ────────────────────────────── */
+/* The Model card uses card--fill so the diagram stage stretches to fill the
+   right pane vertically — see .card--fill below. */
 .model-layout {
   display: grid;
   grid-template-columns: 1fr 280px;
   gap: 16px;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 .model-layout__diagram {
   min-width: 0; /* let the grid track shrink instead of overflowing */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 @media (max-width: 1100px) {
   .model-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.card--fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ─── Loops panel ────────────────────────────────────────────────────────── */
@@ -707,7 +723,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 560px;
+  min-height: 0;
   overflow-y: auto;
 }
 .loops--empty {
@@ -822,6 +838,8 @@ a:hover {
   display: flex;
   flex-direction: column;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 .diagram-toolbar {
   display: flex;
@@ -885,24 +903,29 @@ a:hover {
 .diagram-stage {
   position: relative;
   width: 100%;
-  height: 480px;
+  flex: 1;
+  min-height: 360px;
   overflow: hidden;
   cursor: grab;
   background: var(--surface);
   border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .diagram-stage--grabbing {
   cursor: grabbing;
 }
+/* The host is a transform wrapper for pan only. Flex centring on the stage
+   handles position when the SVG fits; when the SVG overflows (zoomed in
+   beyond fit), the user pans via the host's translate. Scale is NOT applied
+   in CSS — Diagram.tsx sets the SVG's intrinsic width/height so the browser
+   re-rasterises vectors crisply at every zoom level. */
 .diagram-host {
-  position: absolute;
-  top: 0;
-  left: 0;
-  padding: 20px;
-  pointer-events: none; /* events bubble to stage for pan/zoom */
-  will-change: transform;
+  flex-shrink: 0;
+  pointer-events: none;
 }
-.diagram-host svg {
+.diagram-host > svg {
   display: block;
   pointer-events: auto;
   overflow: visible;
