@@ -102,7 +102,7 @@ describe('units — compile-time check', () => {
         '',
       ].join('\n'),
     );
-    const warns = diagnostics.filter((d) => d.code === 'SD0072');
+    const warns = diagnostics.filter((d) => d.code === 'SD0091');
     expect(warns).toEqual([]);
   });
 
@@ -115,7 +115,7 @@ describe('units — compile-time check', () => {
         '',
       ].join('\n'),
     );
-    const warns = diagnostics.filter((d) => d.code === 'SD0072');
+    const warns = diagnostics.filter((d) => d.code === 'SD0091');
     expect(warns.length).toBe(1);
     expect(warns[0]!.message).toMatch(/people.*year|year.*people/);
   });
@@ -131,7 +131,7 @@ describe('units — compile-time check', () => {
         '',
       ].join('\n'),
     );
-    expect(diagnostics.filter((d) => d.code === 'SD0072')).toEqual([]);
+    expect(diagnostics.filter((d) => d.code === 'SD0091')).toEqual([]);
   });
 
   it('warns when an exp/log argument is not dimensionless', () => {
@@ -142,7 +142,7 @@ describe('units — compile-time check', () => {
         '',
       ].join('\n'),
     );
-    const warns = diagnostics.filter((d) => d.code === 'SD0072');
+    const warns = diagnostics.filter((d) => d.code === 'SD0091');
     expect(warns.some((w) => w.message.includes('exp'))).toBe(true);
   });
 
@@ -155,6 +155,6 @@ describe('units — compile-time check', () => {
         '',
       ].join('\n'),
     );
-    expect(diagnostics.filter((d) => d.code === 'SD0072')).toEqual([]);
+    expect(diagnostics.filter((d) => d.code === 'SD0091')).toEqual([]);
   });
 });

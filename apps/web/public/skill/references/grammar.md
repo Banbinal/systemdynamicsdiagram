@@ -8,8 +8,13 @@
 4. Built-in functions
 5. Modules and scoping
 6. Scenarios and sweeps
-7. Indentation rules
-8. Diagnostic codes (the errors you might cause)
+7. Subscripts (1D fan-out)
+8. Reference modes
+9. Reality Check assertions
+10. Calibration
+11. Units annotations
+12. Indentation rules
+13. Diagnostic codes (the errors you might cause)
 
 ---
 
@@ -38,15 +43,23 @@ Documentation only; appears in the web app header.
 ### `constant`
 
 ```
-constant <Name> = <expr>
+constant <Name> = <expr>                     # plain
+constant <Name> = <expr> [<unit-expr>]        # with units (see §11)
+constant <Name>[<Sub>] = <expr>               # subscripted (see §7)
+constant <Name>[<Sub>] = [<v1>, <v2>, ...]    # subscripted, per-element values
+exogenous constant <Name> = <expr>            # boundary marker (input from outside)
 ```
 
 Evaluated once at compile time. Override in scenarios with `constant <Path> = <value>`.
 
+`exogenous constant` is identical to `constant` at runtime — the prefix only flags the variable as an input from outside the modelled system. The renderer marks exogenous constants with a dashed border + "exo" badge.
+
 ### `stock`
 
 ```
-stock <Name> = <init-expr>
+stock <Name> = <init-expr>                    # plain
+stock <Name> = <init-expr> [<unit-expr>]       # with units
+stock <Name>[<Sub>] = <init-expr>              # subscripted
 ```
 
 State variable with an initial condition. Updated by flows during simulation. Override the *initial* value in scenarios with `stock <Path> = <value>`.
@@ -54,7 +67,8 @@ State variable with an initial condition. Updated by flows during simulation. Ov
 ### `calc`
 
 ```
-calc <Name> = <expr>
+calc <Name> = <expr>                          # plain
+calc <Name>[<Sub>] = <expr>                   # subscripted
 ```
 
 A value derived from current stocks/calcs/constants/`time`. Recomputed every step. Cannot form a cycle with another calc — break cycles by routing through a stock (this is also how feedback loops are correctly modeled).
@@ -62,10 +76,13 @@ A value derived from current stocks/calcs/constants/`time`. Recomputed every ste
 ### `flow`
 
 ```
-flow <Name>:
+flow <Name>:                                  # plain
     <expr> -+> <Stock>
     <expr> --> <Stock>
     ...
+
+flow <Name>[<Sub>]:                           # subscripted
+    <expr-using-Sub> -+> <Stock>[<Sub>]
 ```
 
 A flow's body is a list of *effects*. Each effect is `<magnitude-expr> <arrow> <target-stock>`. At least one effect required. A flow can hit multiple different stocks (one effect per line).
@@ -249,7 +266,168 @@ The simulator produces one trajectory per value. Sweeps cover *one* constant per
 
 ---
 
-## 7. Indentation rules
+## 7. Subscripts (1D fan-out)
+
+A `subscript` declares a named dimension and a fixed list of element names:
+
+```
+subscript Region = North, South, East, West
+```
+
+Declarations can carry the dimension via `[<Sub>]`:
+
+```
+constant BirthRate[Region] = 0.05                    # uniform across elements
+constant DeathRate[Region] = [0.02, 0.03, 0.025, 0.04]   # per-element values
+stock Population[Region] = 100
+flow Births[Region]:
+    Population[Region] * BirthRate[Region] -+> Population[Region]
+```
+
+The compiler **expands** these into one variable per element before any other pass. After expansion, `Population[Region]` becomes four scalar stocks: `Population_North`, `Population_South`, `Population_East`, `Population_West`. Same for the constants and the flow.
+
+References can use either form:
+- `Population[Region]` — only inside a subscripted decl that uses `Region`. Binds to the current element.
+- `Population[North]` — anywhere. Refers to the specific expanded variable. Common in scalar contexts:
+
+```
+calc TotalPopulation = Population[North] + Population[South] + Population[East] + Population[West]
+```
+
+Constraints (Phase 1):
+- Only **one** subscript per declaration. No multi-dim arrays (`Trade[Origin, Dest]` not yet supported).
+- Subscripts must be declared at top level, not inside a `module`.
+- Per-element array literals must have exactly the same length as the subscript's element list (SD0050x).
+- `[Region]` (the dimension name) outside a subscripted decl is an error (SD0048).
+
+---
+
+## 8. Reference modes
+
+Sterman-style "expected behaviour over time": declare points the model should reproduce. Drawn as a dashed overlay on the simulation chart.
+
+```
+reference <Stock>:
+    (<t>, <value>)
+    (<t>, <value>)
+    ...
+```
+
+At least two points required. Times can be in any order — the simulator sorts them. The target must resolve to a stock or calc.
+
+```
+reference Population:
+    (0, 100)
+    (10, 220)
+    (50, 480)
+    (100, 490)
+```
+
+Reference modes also serve as the target series for `calibrate` (§10).
+
+---
+
+## 9. Reality Check assertions
+
+Each `check` block runs an isolated simulation with its `when` overrides applied, then evaluates the assertion at every recorded step (`always`) or at the step closest to a given time (`at t = N`).
+
+```
+check <Name>:
+    when <Constant> = <expr>           # zero or more constant overrides
+    then <lhs> <op> <rhs> always       # operators: >= <= > < == !=
+    # or: ... at t = <number>
+```
+
+```
+check Population_nonneg:
+    then Population >= 0 always
+
+check Crash_within_horizon:
+    when BirthRate = 0
+    when DeathRate = 0.1
+    then Population <= 50 at t = 100
+```
+
+Constraints:
+- Exactly one `then` clause per check (SD0034 if multiple).
+- The `when` target must resolve to a `constant`.
+- The lhs / rhs are arbitrary expressions; they're parsed without consuming the surrounding comparison op.
+
+Surfaced in a "Checks" tab in the simulator with pass/fail badges.
+
+---
+
+## 10. Calibration
+
+Fits free constants to the model's `reference` modes via Nelder-Mead. One block per program (last wins if duplicated). Each `bounds` line declares one free parameter and its allowed range.
+
+```
+calibrate:
+    bounds <Constant> = [<low>, <high>]
+    bounds <Constant> = [<low>, <high>]
+    ...
+```
+
+```
+calibrate:
+    bounds BirthRate = [0.01, 0.5]
+    bounds CarryingCapacity = [100, 2000]
+```
+
+Constraints:
+- At least one `bounds` line (SD0045).
+- `low` ≤ `high` (SD0046).
+- The target must resolve to a `constant`.
+- Needs at least one `reference` mode somewhere in the program — otherwise the runtime returns an error.
+
+The simulator runs the calibration in its "Calibrate" tab, reports RMSE before/after, and offers a button to apply fitted values to the SyntheSim live tweak panel.
+
+---
+
+## 11. Units annotations
+
+Optional `[unit-expr]` suffix on `constant` and `stock` values. Used by the compiler to flag dimensional mismatches in arithmetic (warnings, never errors).
+
+```
+constant <Name> = <expr> [<unit-expr>]
+stock    <Name> = <init> [<unit-expr>]
+```
+
+Unit expression grammar (inside the brackets):
+
+```
+unit-expr := factor (('*' | '/') factor)*
+factor    := IDENT ('^' INT)?
+           | NUMBER     # only `1` is allowed (for `[1/year]`)
+```
+
+Examples:
+```
+constant BirthRate = 0.05 [1/year]
+constant Pop = 1000 [people]
+constant Inflow = 200 [people/year]
+constant Volume = 50 [m^3]
+constant Pressure = 0.1 [kg/(m*s^2)]   # not yet — only `*` and `/` infix, no parens
+```
+
+(Last example would need to be written `[kg/m/s^2]` — see grammar above. Phase 1 keeps the grammar flat.)
+
+Algebra:
+- `mul` / `div` add/subtract exponents per base name.
+- `pow` (via `^`) scales exponents.
+- `+` / `−` / comparisons require matching units (warning if mismatched).
+- `exp` / `log` / `sin` / `cos` / `tan` require dimensionless arguments.
+- `sqrt` halves exponents (allowed when all even).
+
+Phase 1 has **no unit conversion**: `year` and `month` are different dimensions and mixing them produces a warning. Pick one consistent time unit per model.
+
+Numeric literals are silently promoted to whatever units the other side carries: `Population >= 0` does not warn even though `Population` is `[people]` and `0` is technically dimensionless.
+
+Diagnostic codes: SD0090 (invalid unit token), SD0091 (mismatch in `+`/`−`/comparison), SD0092 (declared vs inferred mismatch), SD0093 (malformed annotation).
+
+---
+
+## 12. Indentation rules
 
 The lexer is Python-style indentation-sensitive:
 
@@ -272,7 +450,7 @@ The two effect lines must be indented identically. The next top-level declaratio
 
 ---
 
-## 8. Diagnostic codes
+## 13. Diagnostic codes
 
 When the user reports an error, look it up here.
 
@@ -287,7 +465,7 @@ When the user reports an error, look it up here.
 | SD0014 | Unmatched / mismatched bracket                         |
 | SD0015 | Unclosed bracket at EOF                                |
 
-### Parser (SD002x)
+### Parser (SD002x – SD004x)
 
 | Code   | Meaning                                                          |
 |--------|------------------------------------------------------------------|
@@ -302,15 +480,29 @@ When the user reports an error, look it up here.
 | SD0028 | Module body is empty                                             |
 | SD0029 | Scenario body is empty                                           |
 | SD0030 | Duplicate `min` or `max` in `limit`                              |
+| SD0033 | Inside a `check`, expected `when` or `then` (got something else) |
+| SD0034 | A `check` has more than one `then` clause                        |
+| SD0035 | A `check` has no `then` clause                                   |
+| SD0036 | Expected comparison operator in check assertion                  |
+| SD0037 | Expected temporal qualifier (`always` or `at t = N`)             |
+| SD0038 | `exogenous` not followed by `constant`                           |
+| SD0039 | `reference` block has fewer than 2 points                        |
+| SD0044 | Inside `calibrate`, expected `bounds` (got something else)       |
+| SD0045 | `calibrate` block has no `bounds` parameters                     |
+| SD0046 | `bounds` reverse-ordered: `low` > `high`                         |
+| SD0047 | `subscript` lists fewer than 2 elements                          |
 
 ### Semantic (SD004x, SD005x)
 
-| Code   | Meaning                                                  |
-|--------|----------------------------------------------------------|
-| SD0040 | Duplicate declaration in the same scope                  |
-| SD0041 | Unresolved reference (typo, missing module prefix)       |
-| SD0042 | Reserved name redefinition (`time`)                      |
-| SD0050 | Cycle in `calc`/`constant` dependencies                  |
+| Code    | Meaning                                                          |
+|---------|------------------------------------------------------------------|
+| SD0040  | Duplicate declaration in the same scope                          |
+| SD0041  | Unresolved reference (typo, missing module prefix)               |
+| SD0042  | Reserved name redefinition (`time`)                              |
+| SD0048  | Subscript dimension referenced outside a subscripted decl        |
+| SD0049  | Declaration references unknown subscript                         |
+| SD0050  | Cycle in `calc`/`constant` dependencies                          |
+| SD0050x | Subscript array literal length ≠ subscript element count         |
 
 ### Desugaring arity (SD007x)
 
@@ -330,6 +522,7 @@ When the user reports an error, look it up here.
 | SD0062 | Built-in used as a value (must be called)                |
 | SD0063 | Map used as a value (must be invoked: `M(x)`)            |
 | SD0064 | Symbol used in a context its kind doesn't support        |
+| SD0065 | Array literal used outside a subscripted constant init    |
 
 ### Runtime (SD008x)
 
@@ -339,3 +532,14 @@ When the user reports an error, look it up here.
 | SD0081 | Unknown solver name                                           |
 | SD0082 | Unknown scenario name                                         |
 | SD0083 | Sweep cartesian product exceeds the variation cap             |
+
+### Units check (SD009x)
+
+All warnings — units annotations never block simulation.
+
+| Code   | Meaning                                                       |
+|--------|---------------------------------------------------------------|
+| SD0090 | Invalid token inside a `[unit-expr]` annotation               |
+| SD0091 | Dimensional mismatch in `+` / `−` / comparison                |
+| SD0092 | Constant or stock declared units differ from inferred         |
+| SD0093 | Malformed unit annotation (parse error in the brackets)       |

@@ -9,9 +9,10 @@
  * no declared units yields "unknown" units (no check fires).
  *
  * Stable codes:
- *   SD0072  dimensional mismatch in + / -
- *   SD0073  stock init units differ from declared stock units
- *   SD0074  invalid unit annotation (parse error in [...])
+ *   SD0090  invalid token inside a unit annotation (emitted by parser)
+ *   SD0091  dimensional mismatch in + / − or comparison
+ *   SD0092  declared units differ from inferred (constant or stock)
+ *   SD0093  invalid unit annotation (parse error in the bracket content)
  */
 
 import type { Diagnostic } from '../diagnostics/diagnostic.js';
@@ -58,7 +59,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
     for (const err of parsed.errors) {
       diagnostics.push({
         severity: 'warning',
-        code: 'SD0074',
+        code: 'SD0093',
         message: `Invalid unit annotation on '${sym.fqn}': ${err}`,
         range: stmt.range,
       });
@@ -113,7 +114,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
             ) {
               diagnostics.push({
                 severity: 'warning',
-                code: 'SD0072',
+                code: 'SD0091',
                 message: `Dimensional mismatch in '${e.op}': ${formatUnits(l)} ${e.op} ${formatUnits(r)}.`,
                 range: e.range,
               });
@@ -150,7 +151,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
             ) {
               diagnostics.push({
                 severity: 'warning',
-                code: 'SD0072',
+                code: 'SD0091',
                 message: `Dimensional mismatch in '${e.op}': ${formatUnits(l)} ${e.op} ${formatUnits(r)}.`,
                 range: e.range,
               });
@@ -179,7 +180,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
             if (u !== null && u !== undefined && !equal(u, EMPTY)) {
               diagnostics.push({
                 severity: 'warning',
-                code: 'SD0072',
+                code: 'SD0091',
                 message: `'${e.callee}' expects a dimensionless argument; got ${formatUnits(u)}.`,
                 range: e.range,
               });
@@ -200,7 +201,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
             if (u0 !== null && u0 !== undefined && u1 !== null && u1 !== undefined && !equal(u0, u1)) {
               diagnostics.push({
                 severity: 'warning',
-                code: 'SD0072',
+                code: 'SD0091',
                 message: `'${e.callee}' arguments have different units: ${formatUnits(u0)} vs ${formatUnits(u1)}.`,
                 range: e.range,
               });
@@ -236,7 +237,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
             if (!equal(inferred, EMPTY)) {
               diagnostics.push({
                 severity: 'warning',
-                code: 'SD0073',
+                code: 'SD0092',
                 message: `Constant '${sym!.fqn}' declared as ${formatUnits(declared)} but expression evaluates to ${formatUnits(inferred)}.`,
                 range: s.range,
               });
@@ -251,7 +252,7 @@ export function checkUnits(input: CheckUnitsInput): Diagnostic[] {
           if (declared !== undefined && inferred !== null && !equal(declared, inferred) && !equal(inferred, EMPTY)) {
             diagnostics.push({
               severity: 'warning',
-              code: 'SD0073',
+              code: 'SD0092',
               message: `Stock '${sym!.fqn}' declared as ${formatUnits(declared)} but init evaluates to ${formatUnits(inferred)}.`,
               range: s.range,
             });

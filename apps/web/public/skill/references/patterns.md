@@ -212,3 +212,117 @@ Otherwise you'll see SD0080 at runtime. Better: use `limit` on the denominator s
 ## 15. Breaking a calc cycle
 
 If you find yourself wanting `calc A = f(B)` and `calc B = g(A)`, that's SD0050 (cycle in calcs). The fix is structural: one of the two should be a `stock` with a flow that closes the loop. This is also the right *modeling* fix — true feedback in the world is mediated by something that holds state (inventory, opinion, capital), and that thing is a stock.
+
+## 16. Annotating units
+
+Add `[<unit-expr>]` after the value of a `constant` or `stock`. The compiler infers units bottom-up and warns on mismatched arithmetic.
+
+```
+constant BirthRate = 0.05 [1/year]
+constant DeathRate = 0.02 [1/year]
+constant CarryingCapacity = 500 [people]
+stock Population = 100 [people]
+```
+
+The flow `Population * BirthRate -+> Population` then has rate units `people/year`, which matches the stock's `people` after time-integration (the time dimension cancels with `dt`). The check pass doesn't enforce the integration relationship in v1 — it focuses on `+`/`−`/comparison consistency, which is where most user mistakes happen.
+
+When NOT to annotate: purely abstract models with no real-world units (sandboxes, archetypes, pedagogical demos). Annotating those would just add bracket noise.
+
+Pick **one time unit per model** and stick to it: `year` and `month` are different dimensions in v1 (no auto-conversion).
+
+## 17. Tagging exogenous inputs
+
+When a constant represents something **external** to the modelled system — a tax rate set by government, a market price the firm doesn't influence, an environmental input — flag it with `exogenous`:
+
+```
+exogenous constant TaxRate = 0.20
+exogenous constant FuelPrice = 1.50
+```
+
+Runtime behaviour is identical to a regular `constant`. The renderer marks exogenous variables with a dashed border + "exo" badge, making the model's boundary obvious at a glance. Aligns with Sterman's boundary-diagram convention.
+
+## 18. Adding reference modes
+
+When the user describes the **expected behaviour** ("population should reach ~500 at carrying capacity by year 50") or hands you **observed data**, encode it as a `reference` block:
+
+```
+reference Population:
+    (0, 100)
+    (10, 220)
+    (25, 380)
+    (50, 480)
+    (100, 490)
+```
+
+The simulator overlays the reference as a dashed line on the chart with the same colour as the simulated stock — the gap between simulation and reference is then literally visible. At least 2 points required.
+
+Reference modes also serve as the calibration target — pair them with a `calibrate` block when you have enough data to fit.
+
+## 19. Reality Check assertions
+
+Encode invariants the model must satisfy. Each `check` runs an isolated simulation with its `when` overrides applied, then evaluates the assertion at every recorded step (`always`) or at one moment (`at t = N`).
+
+```
+check Population_nonneg:
+    then Population >= 0 always
+
+check Crash_when_births_off:
+    when BirthRate = 0
+    when DeathRate = 0.1
+    then Population <= 50 at t = 100
+
+check Stays_within_capacity:
+    then Population <= CarryingCapacity * 1.05 always
+```
+
+Use them whenever the user describes a **constraint** that must hold ("inventory must stay positive", "the bullwhip must dampen by t=80"). The simulator surfaces them in a Checks tab with pass/fail badges; failures show the failing step + the offending values.
+
+Patterns:
+- `then <stock> >= 0 always` — non-negativity of a population/inventory.
+- `then <stock> <= <capacity> always` — bound respected.
+- `then <stock> > <threshold> after t = <N>` — equilibrium reached.
+- `when <Constant> = <extreme>` — extreme-condition test (Sterman's classical validation).
+
+## 20. Calibration
+
+When the user provides **observed data** and wants the model to fit it, declare `reference` modes for the targets and a `calibrate` block for the free parameters:
+
+```
+reference Population:
+    (0, 100)
+    (10, 220)
+    (50, 480)
+    (100, 490)
+
+calibrate:
+    bounds BirthRate = [0.01, 0.5]
+    bounds CarryingCapacity = [100, 2000]
+```
+
+Nelder-Mead minimises RMSE between simulation and reference. The simulator's "Calibrate" tab shows RMSE before/after, fitted values with position-in-bounds bars, and offers an "Apply to live tweak" button to push fitted values into the SyntheSim sliders.
+
+Pick `bounds` that comfortably contain the plausible range. Too narrow → optimiser hits the wall. Too wide → may drift into nonsense. Order of magnitude headroom on each side is typical.
+
+## 21. Subscripts (cohorts, regions, products)
+
+When you'd otherwise copy-paste the same structure N times for N regions / N age cohorts / N product lines, use a `subscript`:
+
+```
+subscript Region = North, South, East, West
+
+constant BirthRate[Region] = [0.06, 0.04, 0.05, 0.03]
+constant DeathRate[Region] = [0.02, 0.03, 0.025, 0.04]
+stock Population[Region] = 100 [people]
+
+flow Births[Region]:
+    Population[Region] * BirthRate[Region] -+> Population[Region]
+
+flow Deaths[Region]:
+    Population[Region] * DeathRate[Region] --> Population[Region]
+
+calc TotalPopulation = Population[North] + Population[South] + Population[East] + Population[West]
+```
+
+The compiler expands the subscripted statements into 4 independent `Population_*` stocks etc. before any other pass — runtime sees a flat scalar program.
+
+When NOT to use subscripts: when the cohorts have genuinely different structures (e.g. the youngest cohort has no births, the oldest has no further ageing). Then write them as separate stocks, or use a `module` per cohort.

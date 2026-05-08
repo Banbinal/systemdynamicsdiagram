@@ -278,7 +278,7 @@ class Parser {
         default:
           this.diag(
             'error',
-            'SD0070',
+            'SD0090',
             `Unexpected '${t.text}' inside unit expression. Allowed: identifiers, *, /, ^, integers.`,
             t.range,
           );
