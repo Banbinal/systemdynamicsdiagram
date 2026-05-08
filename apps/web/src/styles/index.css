@@ -2799,6 +2799,16 @@ a:hover {
   border-right: 1px solid var(--border);
   overflow-y: auto;
 }
+.docs__nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.docs__nav-group + .docs__nav-group {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
 .docs__nav-title {
   font-size: 11px;
   font-weight: 600;
