@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import mermaid from 'mermaid';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 
 import {
@@ -11,7 +10,7 @@ import {
 } from '@sysdyn/core';
 
 import { Chart, type ChartSeries } from './Chart.tsx';
-import { programToMermaid } from '../lib/programToMermaid.ts';
+import { PrintDiagram } from './PrintDiagram.tsx';
 import { buildShareUrl, encodeShare } from '../lib/share.ts';
 
 const SERIES_COLORS = [
@@ -51,34 +50,15 @@ export function PrintReport({
   elapsedMs,
   onReady,
 }: PrintReportProps) {
-  const diagramRef = useRef<HTMLDivElement>(null);
   const [qrSvg, setQrSvg] = useState<string | null>(null);
   const [diagramReady, setDiagramReady] = useState(false);
   const [qrReady, setQrReady] = useState(false);
 
-  // ── Async render: Mermaid diagram ─────────────────────────────────────────
+  const handleDiagramReady = useCallback(() => setDiagramReady(true), []);
+  // If there's no program at all, mark the diagram ready immediately so the
+  // print pipeline doesn't stall.
   useEffect(() => {
-    let cancelled = false;
-    if (!program) {
-      setDiagramReady(true);
-      return;
-    }
-    const src = programToMermaid(program);
-    const renderId = `print-d-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    mermaid
-      .render(renderId, src)
-      .then(({ svg }) => {
-        if (cancelled || !diagramRef.current) {
-          setDiagramReady(true);
-          return;
-        }
-        diagramRef.current.innerHTML = svg;
-        setDiagramReady(true);
-      })
-      .catch(() => setDiagramReady(true));
-    return () => {
-      cancelled = true;
-    };
+    if (!program) setDiagramReady(true);
   }, [program]);
 
   // ── Async render: QR code with share JWT ──────────────────────────────────
@@ -220,7 +200,13 @@ export function PrintReport({
       {program && (
         <section className="print-section">
           <h2 className="print-h2">Stock-and-flow diagram</h2>
-          <div ref={diagramRef} className="print-diagram" aria-label="Stock-and-flow diagram" />
+          <PrintDiagram
+            program={program}
+            result={result}
+            onReady={handleDiagramReady}
+            width={760}
+            height={460}
+          />
         </section>
       )}
 
