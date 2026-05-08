@@ -202,6 +202,11 @@ class Resolver {
         case 'Limit':
           this.resolveQualifiedTarget(stmt.target, ns);
           break;
+        case 'Reference':
+          // Reference mode targets must resolve to a stock or calc — anything
+          // else can't be plotted on the simulation chart.
+          this.resolveQualifiedTarget(stmt.target, ns);
+          break;
         case 'Check':
           for (const inp of stmt.inputs) {
             this.resolveExpr(inp.expr, ns);

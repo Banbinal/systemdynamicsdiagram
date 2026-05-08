@@ -36,6 +36,8 @@ export type AuxNodeData = {
   readonly label: string;
   readonly kind: 'calc' | 'constant' | 'map';
   readonly size: NodeSize;
+  /** True when the constant was declared `exogenous` — boundary marker. */
+  readonly exogenous?: boolean;
 };
 
 export type CloudNodeData = {
@@ -87,6 +89,16 @@ export interface ProgramGraph {
 
 export interface BuildOptions {
   readonly showAuxiliaries?: boolean;
+  /**
+   * Diagram surface to produce.
+   *   - 'sfd': canonical Forrester stock-and-flow (default). Stocks, flows,
+   *     clouds, matter-flow arcs, info-links via flowInputs + calc influences.
+   *   - 'cld': causal-loop view. Stocks + (optionally) auxiliaries as nodes,
+   *     direct source → target arcs from `program.influences[]`. No flows,
+   *     no clouds, no matter-flow chrome — the SFD plumbing is collapsed
+   *     into the causal arc's polarity.
+   */
+  readonly mode?: 'sfd' | 'cld';
 }
 
 /**
@@ -101,7 +113,11 @@ export function programToReactFlow(
   program: CompiledProgram,
   options: BuildOptions = {},
 ): ProgramGraph {
+  const mode = options.mode ?? 'sfd';
   const showAux = options.showAuxiliaries ?? true;
+  // CLD always shows non-stock variables — without them the causal-link graph
+  // would be missing nodes that arcs anchor to.
+  const showAuxEffective = mode === 'cld' ? true : showAux;
 
   const nodes: DiagramNode[] = [];
   const edges: DiagramEdge[] = [];
@@ -188,21 +204,24 @@ export function programToReactFlow(
     stockColorIdx++;
   }
 
-  // Flows.
-  for (const flowFqn of flows.keys()) {
-    const id = idOf(flowFqn);
-    const label = shortName(flowFqn);
-    nodes.push({
-      id,
-      type: 'flow',
-      position: { x: 0, y: 0 },
-      data: { fqn: flowFqn, label, size: sizeFor('flow', label) },
-    });
-    trackInModule(flowFqn, id);
+  // Flows — emitted only in SFD mode. In CLD mode the flow's contribution
+  // is collapsed into the source → target causal arc on the affected stock.
+  if (mode === 'sfd') {
+    for (const flowFqn of flows.keys()) {
+      const id = idOf(flowFqn);
+      const label = shortName(flowFqn);
+      nodes.push({
+        id,
+        type: 'flow',
+        position: { x: 0, y: 0 },
+        data: { fqn: flowFqn, label, size: sizeFor('flow', label) },
+      });
+      trackInModule(flowFqn, id);
+    }
   }
 
-  // Auxiliaries (gated by toggle).
-  if (showAux) {
+  // Auxiliaries (gated by toggle, forced on in CLD mode).
+  if (showAuxEffective) {
     for (const c of program.calcs) {
       const id = idOf(c.fqn);
       const label = shortName(c.fqn);
@@ -217,11 +236,14 @@ export function programToReactFlow(
     for (const c of program.constants) {
       const id = idOf(c.fqn);
       const label = shortName(c.fqn);
+      const data: AuxNodeData = c.exogenous
+        ? { fqn: c.fqn, label, kind: 'constant', size: sizeFor('constant', label), exogenous: true }
+        : { fqn: c.fqn, label, kind: 'constant', size: sizeFor('constant', label) };
       nodes.push({
         id,
         type: 'aux',
         position: { x: 0, y: 0 },
-        data: { fqn: c.fqn, label, kind: 'constant', size: sizeFor('constant', label) },
+        data,
       });
       trackInModule(c.fqn, id);
     }
@@ -242,6 +264,8 @@ export function programToReactFlow(
   const renderable = new Set(nodes.map((n) => 'fqn' in n.data ? (n.data as { fqn: string }).fqn : ''));
 
   // ── Matter-flow edges (cloud ↔ flow ↔ stock) ─────────────────────────────
+  // CLD mode skips them entirely — the equivalent causal arc is rendered
+  // below as a direct source → stock info link from program.influences[].
   let cloudIdx = 0;
   const newCloud = () => {
     const id = `cloud_${cloudIdx++}`;
@@ -254,7 +278,7 @@ export function programToReactFlow(
     return id;
   };
 
-  for (const [flowFqn, effs] of flows) {
+  if (mode === 'sfd') for (const [flowFqn, effs] of flows) {
     const flowId = idOf(flowFqn);
     const positives = effs.filter((e) => e.polarity === 'positive');
     const negatives = effs.filter((e) => e.polarity === 'negative');
@@ -356,15 +380,24 @@ export function programToReactFlow(
     return { fqns, delayed: true };
   };
 
-  for (const fi of program.flowInputs) {
+  // SFD info-links route through the flow valve (source → flow). CLD has no
+  // flow nodes, so this loop is skipped and the source's effect on the
+  // affected stock is rendered below from `influences[]` instead.
+  if (mode === 'sfd') for (const fi of program.flowInputs) {
     const flowSym = program.symbols.byId(fi.flow);
     if (!flowSym || flowSym.kind !== 'flow') continue;
     const { fqns, delayed } = resolveSourceFqns(fi.source);
     for (const sourceFqn of fqns) drawInfo(sourceFqn, flowSym.fqn, fi.polarity, delayed);
   }
 
+  // Source → target causal arcs from the influence graph. SFD mode draws
+  // only calc targets (stock targets are covered by matter flow + flowInputs);
+  // CLD mode draws every target, including stocks (the SFD plumbing was
+  // collapsed into these arcs by `buildInfluences` already).
   for (const inf of program.influences) {
-    if (symKind(inf.target) !== 'calc') continue;
+    const tk = symKind(inf.target);
+    if (mode === 'sfd' && tk !== 'calc') continue;
+    if (mode === 'cld' && tk !== 'calc' && tk !== 'stock') continue;
     const targetFqn = symFqn(inf.target);
     if (!targetFqn) continue;
     const { fqns, delayed } = resolveSourceFqns(inf.source);

@@ -1,0 +1,67 @@
+# Archetype: Limits to Growth (Senge, Kim — canonical R + B with delay)
+#
+# Structure: a reinforcing loop drives growth, but the same growth fills
+# up a limiting capacity, which feeds back through a balancing loop and
+# eventually arrests further expansion. The B loop typically acts with a
+# delay, so the system overshoots before settling — or worse, collapses.
+#
+# Real-world examples: bacterial growth in finite culture, market saturation,
+# new-product adoption, viral content, Malthusian population.
+#
+# To see the archetype in action, watch how `Demand` saturates: the R loop
+# (word-of-mouth via `AwarenessRate`) dominates early; once `MarketShare`
+# climbs, the B loop (`SaturationPressure`) takes over and growth flattens.
+
+title Limits to Growth - saturating market
+
+StartTime = 0
+EndTime = 60
+TimeStep = 0.25
+
+# State: cumulative customers in a growing market.
+stock Customers = 100
+
+# Total addressable market — the limit.
+constant Market = 10000
+
+# Word-of-mouth strength (what each customer brings in per unit time).
+constant Contagion = 0.4
+
+# How fast satisfaction collapses as the market fills (the limit's bite).
+constant SaturationStrength = 1.2
+
+# ─── Reinforcing loop R: Customers → AwarenessRate → Customers ──────────
+calc MarketShare = Customers / Market
+calc AwarenessRate = Customers * Contagion
+
+# ─── Balancing loop B (the limit): MarketShare → SaturationPressure → … ──
+calc SaturationPressure = SaturationStrength * MarketShare
+
+# Effective acquisition = raw word-of-mouth, dampened by saturation.
+calc EffectiveAcquisitionRate = AwarenessRate * (1 - MarketShare)
+
+flow Acquisition:
+    EffectiveAcquisitionRate -+> Customers
+
+# Population can never exceed the market.
+limit Customers max = 10000
+limit Customers min = 0
+
+scenario WeakLimit:
+    constant SaturationStrength = 0.6     # market fills faster, less braking
+
+scenario StrongContagion:
+    constant Contagion = 0.8              # R loop dominates longer, sharper turn
+
+sweep Contagion = [0.2, 0.4, 0.6, 0.8]
+
+plot Customers
+plot EffectiveAcquisitionRate
+
+# Reality checks: the market should never overflow, and saturation should
+# bring growth to a halt by the end of the horizon.
+check Customers_within_market:
+    then Customers <= Market always
+
+check Saturated_by_end:
+    then EffectiveAcquisitionRate <= 50 at t = 60

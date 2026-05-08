@@ -1140,6 +1140,34 @@ a:hover {
   margin: 0;
   cursor: pointer;
 }
+.diagram-mode {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.diagram-mode__btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--surface);
+  border: 0;
+  padding: 3px 10px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.diagram-mode__btn + .diagram-mode__btn {
+  border-left: 1px solid var(--border);
+}
+.diagram-mode__btn:hover:not(.diagram-mode__btn--on) {
+  background: var(--surface-2);
+  color: var(--ink-1);
+}
+.diagram-mode__btn--on {
+  background: var(--accent);
+  color: #FFFFFF;
+}
 /* (Custom zoom controls removed — React Flow's <Controls/> takes over.) */
 
 /* ─── Diagram scrubber (time playhead) ──────────────────────────────────── */
@@ -1267,6 +1295,25 @@ a:hover {
   font-weight: 500;
   letter-spacing: 0.005em;
   /* Slight vertical optical adjust so descenders sit nicely inside diamonds. */
+}
+
+/* Exogenous-constant badge — small label, top-right of the diamond. */
+.rfn__exo-badge {
+  position: absolute;
+  top: -2px;
+  right: 4px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--bg);
+  color: var(--ink-3);
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  pointer-events: none;
+  line-height: 1.4;
 }
 
 /* Stock gauge percentage badge — small label in the top-right corner. */

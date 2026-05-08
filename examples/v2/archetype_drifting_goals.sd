@@ -1,0 +1,65 @@
+# Archetype: Drifting Goals (Senge — also "Eroding Goals")
+#
+# Structure: when actual performance falls short of the goal, the system
+# can react in two ways:
+#   B1: improve performance (real corrective action).
+#   B2: lower the goal (redefine "good enough" downward).
+# When B2 dominates — because lowering goals is cheaper or politically
+# easier than improving — both performance AND aspirations spiral down.
+#
+# Real-world examples:
+#   - Public service quality metrics gradually relaxed.
+#   - Personal fitness goals walked back over years.
+#   - Software response-time SLOs widened after each missed quarter.
+
+title Drifting Goals - eroding service standard
+
+StartTime = 0
+EndTime = 80
+TimeStep = 0.5
+
+# What we actually deliver.
+stock Performance = 100
+
+# What we aim for.
+stock Goal = 100
+
+# How the gap is split between fixing performance vs lowering the goal.
+# 0 = pure improvement, 1 = pure goal erosion.
+constant GoalErosionPreference = 0.7
+
+# How aggressively we react at all (per gap unit per unit time).
+constant ReactionStrength = 0.05
+
+# Continuous external pressure pulling performance down.
+constant DownwardPressure = 1.5
+
+# ─── B1: gap → improve Performance (corrective) ─────────────────────────
+calc Gap = Goal - Performance
+calc PerformanceImprovement = Gap * ReactionStrength * (1 - GoalErosionPreference)
+
+flow Improve:
+    PerformanceImprovement -+> Performance
+
+# Continuous external pressure (entropy, demand growth, equipment ageing…).
+flow Decay:
+    DownwardPressure --> Performance
+
+# ─── B2: gap → lower Goal (erosion) ─────────────────────────────────────
+calc GoalErosion = Gap * ReactionStrength * GoalErosionPreference
+
+flow LowerGoal:
+    GoalErosion --> Goal
+
+limit Performance min = 0
+limit Goal min = 0
+
+scenario AspireHigher:
+    constant GoalErosionPreference = 0.1   # discipline: nearly all gap → improvement
+
+scenario LetItDrift:
+    constant GoalErosionPreference = 0.95  # rationalisation: nearly all gap → goal cut
+
+plot Performance
+plot Goal
+plot Gap

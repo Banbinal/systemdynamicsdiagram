@@ -82,7 +82,9 @@ interface ShapeProps {
   readonly element: 'rect' | 'roundedRect' | 'polygon' | 'circle';
   /** Polygon points, used iff `element === 'polygon'`. */
   readonly path?: string;
-  readonly extraProps?: Record<string, string | number>;
+  /** Optional dashed-stroke pattern (e.g. '4 3') applied to whichever
+   *  primitive `element` selects. Used by the exogenous boundary marker. */
+  readonly strokeDasharray?: string;
 }
 
 /**
@@ -90,7 +92,8 @@ interface ShapeProps {
  * overlays the label as a centred HTML span on top — using HTML rather than
  * `<text>` keeps fonts pixel-perfect and avoids SVG text antialiasing quirks.
  */
-function Shape({ width, height, label, fill, stroke, strokeWidth, textColor, fontSize, element, extraProps, path }: ShapeProps) {
+function Shape({ width, height, label, fill, stroke, strokeWidth, textColor, fontSize, element, path, strokeDasharray }: ShapeProps) {
+  const dashAttr = strokeDasharray ? { strokeDasharray } : {};
   return (
     <div
       className="rfn"
@@ -118,7 +121,7 @@ function Shape({ width, height, label, fill, stroke, strokeWidth, textColor, fon
             fill={fill}
             stroke={stroke}
             strokeWidth={strokeWidth}
-            {...extraProps}
+            {...dashAttr}
           />
         )}
         {element === 'roundedRect' && (
@@ -132,6 +135,7 @@ function Shape({ width, height, label, fill, stroke, strokeWidth, textColor, fon
             fill={fill}
             stroke={stroke}
             strokeWidth={strokeWidth}
+            {...dashAttr}
           />
         )}
         {element === 'polygon' && path && (
@@ -141,6 +145,7 @@ function Shape({ width, height, label, fill, stroke, strokeWidth, textColor, fon
             stroke={stroke}
             strokeWidth={strokeWidth}
             strokeLinejoin="round"
+            {...dashAttr}
           />
         )}
         {element === 'circle' && (
@@ -151,6 +156,7 @@ function Shape({ width, height, label, fill, stroke, strokeWidth, textColor, fon
             fill={fill}
             stroke={stroke}
             strokeWidth={strokeWidth}
+            {...dashAttr}
           />
         )}
       </svg>
@@ -275,6 +281,7 @@ export function AuxNode({ data }: NodeProps<AuxNodeT>) {
   const fill = FILL[kind];
   const stroke = STROKE[kind];
   const text = LABEL_COLOR[kind];
+  const isExo = data.exogenous === true;
 
   let element: ShapeProps['element'] = 'rect';
   let path = '';
@@ -317,7 +324,9 @@ export function AuxNode({ data }: NodeProps<AuxNodeT>) {
         fontSize={12}
         element={element}
         path={path}
+        {...(isExo ? { strokeDasharray: '4 3' } : {})}
       />
+      {isExo && <span className="rfn__exo-badge" title="exogenous (out-of-system input)">exo</span>}
       <HandleSet />
     </>
   );

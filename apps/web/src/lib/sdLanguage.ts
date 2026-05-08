@@ -40,6 +40,8 @@ const CONFIG_KW = new Set([
   'then',
   'always',
   'at',
+  'exogenous',
+  'reference',
 ]);
 const TIME_KW = new Set(['StartTime', 'EndTime', 'TimeStep']);
 const INTERP_KW = new Set(['linear', 'step', 'spline']);

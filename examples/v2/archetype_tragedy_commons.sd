@@ -1,0 +1,84 @@
+# Archetype: Tragedy of the Commons (Hardin 1968 — formalised by Senge)
+#
+# Structure: each individual actor follows a reinforcing loop where their
+# private gain pushes them to extract more from a shared resource. The
+# collective extraction rate eventually exceeds the regeneration rate,
+# triggering a balancing loop that crashes the resource — and with it,
+# every individual's gain.
+#
+# Real-world examples:
+#   - Overfishing of common waters.
+#   - Aquifers, grazing land, atmospheric CO2 sink.
+#   - Public services drained by free-riders.
+
+title Tragedy of the Commons - fishery collapse
+
+StartTime = 0
+EndTime = 50
+TimeStep = 0.25
+
+# The shared resource (e.g. fish biomass).
+stock FishStock = 1000
+
+# Two fishing fleets, each scaling its activity per its own gain.
+stock FleetA = 10
+stock FleetB = 10
+
+# ─── Resource dynamics: logistic regrowth + extraction ──────────────────
+constant CarryingCapacity = 1000
+constant RegrowthRate = 0.4
+
+calc Density = FishStock / CarryingCapacity
+calc Regrowth = FishStock * RegrowthRate * (1 - Density)
+
+# Per-fleet catchability — proportional to how much fish there is.
+constant CatchPerBoat = 0.05
+calc CatchA = FleetA * FishStock * CatchPerBoat
+calc CatchB = FleetB * FishStock * CatchPerBoat
+
+flow FishRegrowth:
+    Regrowth -+> FishStock
+
+flow FleetACatch:
+    CatchA --> FishStock
+
+flow FleetBCatch:
+    CatchB --> FishStock
+
+# ─── Each fleet's reinforcing loop: catch → profit → more boats ─────────
+constant BoatGrowthRate = 0.1
+constant BoatRetirementRate = 0.02
+
+flow FleetAGrowth:
+    CatchA * BoatGrowthRate -+> FleetA
+
+flow FleetARetirement:
+    FleetA * BoatRetirementRate --> FleetA
+
+flow FleetBGrowth:
+    CatchB * BoatGrowthRate -+> FleetB
+
+flow FleetBRetirement:
+    FleetB * BoatRetirementRate --> FleetB
+
+limit FishStock min = 0
+limit FleetA min = 0
+limit FleetB min = 0
+
+scenario AggressiveFleetA:
+    constant BoatGrowthRate = 0.18         # one fleet over-invests; the other suffers too
+
+scenario CollectiveRestraint:
+    constant BoatGrowthRate = 0.04         # both fleets restrain — the resource holds
+
+# Sweep the catchability so you can watch the threshold where the resource
+# crashes within the horizon.
+sweep CatchPerBoat = [0.02, 0.04, 0.06, 0.08]
+
+plot FishStock
+plot FleetA
+plot FleetB
+
+check Resource_does_not_extinct:
+    when CatchPerBoat = 0.02
+    then FishStock >= 100 always

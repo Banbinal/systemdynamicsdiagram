@@ -43,6 +43,8 @@ import type {
   Program,
   QualifiedRef,
   RefExpr,
+  ReferencePoint,
+  ReferenceStmt,
   ScenarioOverride,
   ScenarioStmt,
   Stmt,
@@ -135,7 +137,8 @@ class Parser {
       case TokenKind.KwEndTime:
       case TokenKind.KwTimeStep:
         return this.parseTimeConfig();
-      case TokenKind.KwConstant: return this.parseConstant();
+      case TokenKind.KwConstant: return this.parseConstant(false);
+      case TokenKind.KwExogenous: return this.parseExogenousConstant();
       case TokenKind.KwStock: return this.parseStock();
       case TokenKind.KwCalc: return this.parseCalc();
       case TokenKind.KwFlow: return this.parseFlow();
@@ -146,6 +149,7 @@ class Parser {
       case TokenKind.KwPlot: return this.parsePlot();
       case TokenKind.KwLimit: return this.parseLimit();
       case TokenKind.KwCheck: return this.parseCheck();
+      case TokenKind.KwReference: return this.parseReference();
       default: {
         this.diag('error', 'SD0020', `Unexpected token '${tok.text}' at top level.`, tok.range);
         this.recoverToNewline();
@@ -203,7 +207,7 @@ class Parser {
     };
   }
 
-  private parseConstant(): ConstantStmt | null {
+  private parseConstant(exogenous: boolean): ConstantStmt | null {
     const kw = this.advance();
     const name = this.expect(TokenKind.Ident);
     if (!name) {
@@ -220,12 +224,36 @@ class Parser {
       return null;
     }
     this.consumeNewline();
-    return {
-      kind: 'Constant',
-      name: name.text,
-      expr,
-      range: { start: kw.range.start, end: expr.range.end },
-    };
+    return exogenous
+      ? {
+          kind: 'Constant',
+          name: name.text,
+          expr,
+          exogenous: true,
+          range: { start: kw.range.start, end: expr.range.end },
+        }
+      : {
+          kind: 'Constant',
+          name: name.text,
+          expr,
+          range: { start: kw.range.start, end: expr.range.end },
+        };
+  }
+
+  /** `exogenous constant <Name> = <expr>` — boundary-marker prefix. */
+  private parseExogenousConstant(): ConstantStmt | null {
+    const exoKw = this.advance(); // 'exogenous'
+    if (this.peek().kind !== TokenKind.KwConstant) {
+      this.diag(
+        'error',
+        'SD0038',
+        `'exogenous' must be followed by 'constant'.`,
+        exoKw.range,
+      );
+      this.recoverToNewline();
+      return null;
+    }
+    return this.parseConstant(true);
   }
 
   private parseStock(): StockStmt | null {
@@ -485,6 +513,57 @@ class Parser {
     return {
       x: x.value,
       y: y.value,
+      range: { start: open.range.start, end: close.range.end },
+    };
+  }
+
+  private parseReference(): ReferenceStmt | null {
+    const kw = this.advance(); // 'reference'
+    const target = this.parseQualifiedRef();
+    if (!target) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Colon)) { this.recoverToNewline(); return null; }
+    if (!this.consumeNewline()) return null;
+    if (!this.expect(TokenKind.Indent)) { this.recoverToDedent(); return null; }
+
+    const points: ReferencePoint[] = [];
+    while (this.peek().kind !== TokenKind.Dedent && !this.isAtEnd()) {
+      if (this.peek().kind === TokenKind.Newline) { this.advance(); continue; }
+      const pt = this.parseReferencePoint();
+      if (pt) points.push(pt);
+    }
+    const close = this.expect(TokenKind.Dedent);
+
+    if (points.length < 2) {
+      this.diag(
+        'error',
+        'SD0039',
+        `Reference mode for '${target.path.join('.')}' must have at least two points.`,
+        kw.range,
+      );
+    }
+
+    return {
+      kind: 'Reference',
+      target,
+      points,
+      range: { start: kw.range.start, end: close?.range.end ?? this.previous().range.end },
+    };
+  }
+
+  private parseReferencePoint(): ReferencePoint | null {
+    const open = this.expect(TokenKind.LParen);
+    if (!open) { this.recoverToNewline(); return null; }
+    const t = this.maybeSignedNumber();
+    if (!t) { this.recoverToNewline(); return null; }
+    if (!this.expect(TokenKind.Comma)) { this.recoverToNewline(); return null; }
+    const v = this.maybeSignedNumber();
+    if (!v) { this.recoverToNewline(); return null; }
+    const close = this.expect(TokenKind.RParen);
+    if (!close) { this.recoverToNewline(); return null; }
+    this.consumeNewline();
+    return {
+      t: t.value,
+      v: v.value,
       range: { start: open.range.start, end: close.range.end },
     };
   }

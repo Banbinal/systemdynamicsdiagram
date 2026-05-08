@@ -1,0 +1,83 @@
+# Archetype: Shifting the Burden (Senge)
+#
+# Structure: a problem symptom can be addressed by a quick symptomatic fix
+# (B1) or by a slower fundamental solution (B2). The quick fix succeeds at
+# reducing the symptom in the short term, which weakens the motivation
+# (and capacity) to apply the fundamental solution — that's the
+# reinforcing addiction loop (R3). Over time, fundamental solving capacity
+# atrophies and the symptom grows back stronger.
+#
+# Real-world examples:
+#   - Borrowing to cover overspending (vs cutting expenses).
+#   - Painkillers vs root-cause therapy.
+#   - Government bailouts vs structural reform.
+
+title Shifting the Burden - quick fix vs fundamental solution
+
+StartTime = 0
+EndTime = 100
+TimeStep = 0.5
+
+# The presenting problem (a symptom).
+stock Symptom = 100
+
+# How effective the organisation is at applying the fundamental solution
+# — the "muscle" that atrophies if unused.
+stock FundamentalCapacity = 50
+
+# How much the quick fix is being relied on. Builds up the addiction.
+stock QuickFixUse = 0
+
+# ─── Parameters ─────────────────────────────────────────────────────────
+constant SymptomDecayFromFix = 0.10        # B1: quick fix reduces symptom (fast)
+constant SymptomDecayFromFundamental = 0.05  # B2: fundamental fix reduces symptom (slow)
+constant FundamentalAtrophyRate = 0.08     # R3: capacity erodes when not used
+constant FundamentalRebuildRate = 0.02     # weak counter-rebuild
+constant QuickFixDecayRate = 0.05          # quick-fix usage normalises over time
+constant QuickFixAdoptionRate = 0.03       # how aggressively new symptom triggers more fix
+
+# ─── B1: Symptom → QuickFix → Symptom (fast, short-term win) ────────────
+calc QuickFixApplied = QuickFixUse * SymptomDecayFromFix
+
+flow QuickFixGrowth:
+    Symptom * QuickFixAdoptionRate -+> QuickFixUse
+
+flow QuickFixWaning:
+    QuickFixUse * QuickFixDecayRate --> QuickFixUse
+
+# ─── B2: Symptom → FundamentalSolution → Symptom (slow, durable) ───────
+calc FundamentalApplied = FundamentalCapacity * SymptomDecayFromFundamental
+
+# ─── R3: addiction — QuickFixUse → atrophy of FundamentalCapacity ──────
+flow CapacityAtrophy:
+    QuickFixUse * FundamentalAtrophyRate * 0.001 --> FundamentalCapacity
+
+flow CapacityRebuild:
+    FundamentalCapacity * FundamentalRebuildRate -+> FundamentalCapacity
+
+# Symptom dynamics: erodes from both fixes, regrows from external pressure.
+constant ExternalPressure = 8
+flow SymptomGrowth:
+    ExternalPressure -+> Symptom
+
+flow SymptomFromQuickFix:
+    QuickFixApplied --> Symptom
+
+flow SymptomFromFundamental:
+    FundamentalApplied --> Symptom
+
+limit Symptom min = 0
+limit FundamentalCapacity min = 0
+limit QuickFixUse min = 0
+
+scenario QuickFixLover:
+    constant QuickFixAdoptionRate = 0.08
+    constant FundamentalRebuildRate = 0.005    # active addiction → atrophy wins
+
+scenario DisciplinedReform:
+    constant QuickFixAdoptionRate = 0.005
+    constant FundamentalRebuildRate = 0.06     # invest in capacity instead
+
+plot Symptom
+plot FundamentalCapacity
+plot QuickFixUse

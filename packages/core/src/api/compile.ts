@@ -41,6 +41,7 @@ import type {
   MapStmt,
   PlotStmt,
   Program,
+  ReferenceStmt,
   ScenarioStmt,
   Stmt,
   StockStmt,
@@ -61,6 +62,7 @@ import type {
   Influence,
   LimitIR,
   MapData,
+  ReferenceModeIR,
   ScenarioIR,
   StockIR,
   SweepIR,
@@ -128,11 +130,14 @@ export function compile(ast: Program): CompileResult {
     .map((id) => buckets.constantsBySymId.get(id))
     .filter((x): x is { stmt: ConstantStmt; symbol: Symbol } => x !== undefined);
 
-  const constants = constantsByTopo.map(({ stmt, symbol }) => ({
-    slot: slots.constantSlot.get(symbol.id)!,
-    fqn: symbol.fqn,
-    expr: lower(stmt.expr),
-  }));
+  const constants = constantsByTopo.map(({ stmt, symbol }) => {
+    const base = {
+      slot: slots.constantSlot.get(symbol.id)!,
+      fqn: symbol.fqn,
+      expr: lower(stmt.expr),
+    };
+    return stmt.exogenous ? { ...base, exogenous: true } : base;
+  });
 
   const stocks: StockIR[] = buckets.stocks.map(({ stmt, symbol }) => {
     const base = {
@@ -275,7 +280,18 @@ export function compile(ast: Program): CompileResult {
     });
   }
 
-  // ─── 10. Assemble ──────────────────────────────────────────────────────
+  // ─── 10. Reference modes — sort points by t for monotonic plotting ─────
+  const references: ReferenceModeIR[] = [];
+  for (const ref of buckets.references) {
+    const sym = resolveTarget(r.resolvedRefs, ref.target);
+    if (!sym) continue;
+    const sortedPoints = [...ref.points]
+      .map((p) => ({ t: p.t, v: p.v }))
+      .sort((a, b) => a.t - b.t);
+    references.push({ fqn: sym.fqn, points: sortedPoints });
+  }
+
+  // ─── 11. Assemble ──────────────────────────────────────────────────────
   const program: CompiledProgram = {
     title,
     time,
@@ -292,6 +308,7 @@ export function compile(ast: Program): CompileResult {
     influences,
     flowInputs,
     checks,
+    references,
     diagnostics,
     stockCount: stocks.length,
     constantCount: constants.length,
@@ -317,6 +334,7 @@ interface Buckets {
   readonly plots: PlotStmt[];
   readonly limits: LimitStmt[];
   readonly checks: CheckStmt[];
+  readonly references: ReferenceStmt[];
   readonly constantsBySymId: Map<number, { stmt: ConstantStmt; symbol: Symbol }>;
   readonly calcsBySymId: Map<number, { stmt: CalcStmt; symbol: Symbol }>;
 }
@@ -335,6 +353,7 @@ function collectStmts(ast: Program): Buckets {
     plots: [],
     limits: [],
     checks: [],
+    references: [],
     constantsBySymId: new Map(),
     calcsBySymId: new Map(),
   };
@@ -360,6 +379,7 @@ function walk(stmts: readonly Stmt[], b: Buckets): void {
       case 'Plot': b.plots.push(s); break;
       case 'Limit': b.limits.push(s); break;
       case 'Check': b.checks.push(s); break;
+      case 'Reference': b.references.push(s); break;
     }
   }
 }

@@ -47,3 +47,14 @@ check Stays_below_capacity:
 
 plot Population
 plot ActualBirthRate
+
+# ── Reference mode ────────────────────────────────────────────────────────
+# Sterman's discipline: state the expected behaviour BEFORE simulating, so
+# the model has a target to be calibrated against. Rendered as a dashed
+# overlay on the simulation chart.
+reference Population:
+    (0, 100)
+    (25, 250)
+    (50, 400)
+    (75, 470)
+    (100, 490)

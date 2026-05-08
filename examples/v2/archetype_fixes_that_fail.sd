@@ -1,0 +1,63 @@
+# Archetype: Fixes that Fail (Senge — also called "Fixes that Backfire")
+#
+# Structure: a problem prompts a fix that works in the short term (B), but
+# the fix produces an unintended consequence that, after a delay, makes
+# the original problem worse (R). The decision-maker, seeing the symptom
+# return, applies more of the same fix — and the system spirals.
+#
+# Real-world examples:
+#   - Antibiotics → resistant bacteria.
+#   - Highway widening → induced demand → more congestion.
+#   - Cutting maintenance → fewer breakdowns now → more catastrophic
+#     failures later.
+
+title Fixes that Fail - antibiotic resistance
+
+StartTime = 0
+EndTime = 50
+TimeStep = 0.25
+
+# The presenting infection load.
+stock Infections = 100
+
+# Bacterial resistance built up by repeated antibiotic pressure.
+stock Resistance = 5
+
+# ─── B: Infections → Antibiotics → Infections (short-term win) ─────────
+constant InfectionGrowthRate = 0.15
+constant AntibioticDose = 0.4
+constant AntibioticEffectiveness = 1.0
+
+# Antibiotic effect declines as resistance climbs.
+calc EffectiveDose = AntibioticDose * AntibioticEffectiveness * (1 - Resistance / 100)
+
+flow InfectionGrowth:
+    Infections * InfectionGrowthRate -+> Infections
+
+flow Treatment:
+    Infections * EffectiveDose --> Infections
+
+# ─── R: Antibiotics → Resistance (delayed) → Infections grow back ──────
+constant ResistanceBuildup = 0.04
+constant ResistanceDecay = 0.005
+
+# Resistance accumulates with use, decays slowly when antibiotic stops.
+flow ResistanceGain:
+    smooth(EffectiveDose * ResistanceBuildup, 4) -+> Resistance
+
+flow ResistanceDecayFlow:
+    Resistance * ResistanceDecay --> Resistance
+
+limit Infections min = 0
+limit Resistance min = 0
+limit Resistance max = 100
+
+scenario StrongDoses:
+    constant AntibioticDose = 0.8          # bigger fix → faster resistance → bigger crash
+
+scenario CombinationTherapy:
+    constant ResistanceBuildup = 0.01      # the fundamental fix: lower selection pressure
+
+plot Infections
+plot Resistance
+plot EffectiveDose

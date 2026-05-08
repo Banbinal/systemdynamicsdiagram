@@ -132,6 +132,12 @@ export interface CheckIR {
   readonly temporal: CheckTemporal;
 }
 
+/** Reference-mode IR — a (t, v) point list keyed by target FQN. */
+export interface ReferenceModeIR {
+  readonly fqn: string;
+  readonly points: ReadonlyArray<{ readonly t: number; readonly v: number }>;
+}
+
 /**
  * The result of `compile(ast)`: ready for `simulate(program)`.
  *
@@ -143,7 +149,13 @@ export interface CompiledProgram {
   readonly time: TimeConfig;
   readonly symbols: SymbolTable;
   readonly stocks: readonly StockIR[];
-  readonly constants: ReadonlyArray<{ slot: number; fqn: string; expr: CompiledExpr }>;
+  readonly constants: ReadonlyArray<{
+    slot: number;
+    fqn: string;
+    expr: CompiledExpr;
+    /** Set when declared `exogenous constant …` — surfaced by the renderer. */
+    exogenous?: boolean;
+  }>;
   readonly calcs: readonly CalcIR[]; // already topologically sorted
   readonly flowEffects: readonly FlowEffectIR[];
   readonly maps: readonly MapData[];
@@ -154,6 +166,7 @@ export interface CompiledProgram {
   readonly influences: readonly Influence[];
   readonly flowInputs: readonly FlowInput[];
   readonly checks: readonly CheckIR[];
+  readonly references: readonly ReferenceModeIR[];
   readonly diagnostics: readonly Diagnostic[];
   /** Total number of stock slots (including synthetic stocks from desugaring). */
   readonly stockCount: number;

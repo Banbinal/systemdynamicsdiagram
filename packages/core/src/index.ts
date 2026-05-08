@@ -100,6 +100,7 @@ export type {
   CheckInputIR,
   CheckOp,
   CheckTemporal,
+  ReferenceModeIR,
 } from './ir/program.js';
 
 // Runtime

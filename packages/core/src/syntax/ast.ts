@@ -26,7 +26,8 @@ export type Stmt =
   | SweepStmt
   | PlotStmt
   | LimitStmt
-  | CheckStmt;
+  | CheckStmt
+  | ReferenceStmt;
 
 export interface NodeBase {
   readonly range: SourceRange;
@@ -49,6 +50,13 @@ export interface ConstantStmt extends NodeBase {
   readonly kind: 'Constant';
   readonly name: string;
   readonly expr: Expr;
+  /**
+   * Set when the constant is declared `exogenous constant X = ...` —
+   * flags it as an input that comes from outside the modelled system
+   * (per Sterman's boundary-diagram convention). The renderer draws
+   * exogenous constants with a dashed border + "exo" badge.
+   */
+  readonly exogenous?: boolean;
 }
 
 export interface StockStmt extends NodeBase {
@@ -170,6 +178,23 @@ export interface CheckStmt extends NodeBase {
   /** The assertion's right-hand expression (`0` in `Population >= 0`). */
   readonly rhs: Expr;
   readonly temporal: CheckTemporal;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Reference modes — Sterman's "expected behaviour over time" target. Drawn
+// as a dashed overlay on the simulation chart so the modeller sees the gap
+// between the model's output and the cited behaviour.
+
+export interface ReferencePoint {
+  readonly t: number;
+  readonly v: number;
+  readonly range: SourceRange;
+}
+
+export interface ReferenceStmt extends NodeBase {
+  readonly kind: 'Reference';
+  readonly target: QualifiedRef;
+  readonly points: readonly ReferencePoint[];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -48,6 +48,7 @@ export function Diagram(props: DiagramProps) {
 
 function DiagramInner({ program, result, timeIndex }: DiagramProps) {
   const [showAux, setShowAux] = useState(true);
+  const [mode, setMode] = useState<'sfd' | 'cld'>('sfd');
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [layoutErr, setLayoutErr] = useState<string | null>(null);
@@ -117,8 +118,8 @@ function DiagramInner({ program, result, timeIndex }: DiagramProps) {
   // read it without re-running programToReactFlow when overrides change.
   const graph = useMemo(() => {
     if (!program) return null;
-    return programToReactFlow(program, { showAuxiliaries: showAux });
-  }, [program, showAux]);
+    return programToReactFlow(program, { showAuxiliaries: showAux, mode });
+  }, [program, showAux, mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -249,11 +250,30 @@ function DiagramInner({ program, result, timeIndex }: DiagramProps) {
   return (
     <div className="diagram-wrap">
       <div className="diagram-toolbar">
-        <label className="diagram-toggle">
+        <div className="diagram-mode" role="group" aria-label="Diagram mode">
+          <button
+            type="button"
+            className={'diagram-mode__btn' + (mode === 'sfd' ? ' diagram-mode__btn--on' : '')}
+            onClick={() => setMode('sfd')}
+            title="Stock-and-flow (Forrester)"
+          >
+            SFD
+          </button>
+          <button
+            type="button"
+            className={'diagram-mode__btn' + (mode === 'cld' ? ' diagram-mode__btn--on' : '')}
+            onClick={() => setMode('cld')}
+            title="Causal loop (collapsed via influences)"
+          >
+            CLD
+          </button>
+        </div>
+        <label className="diagram-toggle" style={{ opacity: mode === 'cld' ? 0.4 : 1 }}>
           <input
             type="checkbox"
             checked={showAux}
             onChange={(e) => setShowAux(e.target.checked)}
+            disabled={mode === 'cld'}
           />
           <span>Show auxiliaries</span>
         </label>

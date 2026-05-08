@@ -8,9 +8,18 @@ export interface ChartSeries {
   readonly visible: boolean;
 }
 
+/** Sterman-style reference mode: expected behaviour over time, drawn as a
+ *  dashed overlay on top of the simulated series so the gap is visible. */
+export interface ReferenceOverlay {
+  readonly fqn: string;
+  readonly points: ReadonlyArray<{ readonly t: number; readonly v: number }>;
+  readonly color: string;
+}
+
 interface ChartProps {
   readonly time: Float64Array;
   readonly series: readonly ChartSeries[];
+  readonly references?: readonly ReferenceOverlay[];
 }
 
 interface HoverState {
@@ -28,7 +37,7 @@ interface HoverState {
  *     crosshair, dots on each visible series, and an HTML tooltip listing
  *     every series sorted descending by value at that t.
  */
-export function Chart({ time, series }: ChartProps) {
+export function Chart({ time, series, references }: ChartProps) {
   const visible = useMemo(() => series.filter((s) => s.visible), [series]);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -75,6 +84,18 @@ export function Chart({ time, series }: ChartProps) {
       if (Number.isFinite(v)) {
         if (v < yMin) yMin = v;
         if (v > yMax) yMax = v;
+      }
+    }
+  }
+  // Reference modes participate in the y-range so the overlay stays inside
+  // the plot area (otherwise a high-target reference would clip silently).
+  if (references) {
+    for (const r of references) {
+      for (const p of r.points) {
+        if (Number.isFinite(p.v)) {
+          if (p.v < yMin) yMin = p.v;
+          if (p.v > yMax) yMax = p.v;
+        }
       }
     }
   }
@@ -221,6 +242,40 @@ export function Chart({ time, series }: ChartProps) {
         <text className="axis-title" x={W - M.right} y={H - 4} textAnchor="end">
           TIME →
         </text>
+
+        {/* Reference modes: dashed overlay drawn behind the series so the
+            simulated line stays foregrounded. Each reference's points are
+            joined by a polyline (no smoothing — it's a target, not a fit). */}
+        {references && references.map((r) => (
+          <path
+            key={`ref-${r.fqn}`}
+            className="reference"
+            fill="none"
+            stroke={r.color}
+            strokeWidth={1.4}
+            strokeOpacity={0.6}
+            strokeDasharray="6 4"
+            d={r.points
+              .map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.t)} ${yScale(p.v)}`)
+              .join(' ')}
+          />
+        ))}
+        {/* Reference endpoint markers (small open circles) so the user can
+            see the data points the curve interpolates through. */}
+        {references && references.map((r) =>
+          r.points.map((p, i) => (
+            <circle
+              key={`ref-${r.fqn}-pt-${i}`}
+              cx={xScale(p.t)}
+              cy={yScale(p.v)}
+              r={3}
+              fill="var(--surface)"
+              stroke={r.color}
+              strokeWidth={1.2}
+              strokeOpacity={0.8}
+            />
+          )),
+        )}
 
         {visible.map((s) => (
           <path

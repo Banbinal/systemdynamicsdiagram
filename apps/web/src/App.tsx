@@ -12,7 +12,7 @@ import {
 } from './lib/share.ts';
 
 import { Editor } from './components/Editor.tsx';
-import { Chart, type ChartSeries } from './components/Chart.tsx';
+import { Chart, type ChartSeries, type ReferenceOverlay } from './components/Chart.tsx';
 import { ChartLegend } from './components/ChartLegend.tsx';
 import { Diagnostics } from './components/Diagnostics.tsx';
 import { TerminalTable } from './components/TerminalTable.tsx';
@@ -239,6 +239,20 @@ export function App() {
   // The chart uses the tweaked result whenever overrides are non-empty so
   // SyntheSim sliders feel live.
   const chartResult = tweakedResult ?? sim.result;
+
+  // Reference modes — pulled off the compiled program. Each one is matched
+  // to its target stock's chart-series colour so the dashed overlay sits
+  // visually next to the simulated line it targets.
+  const referenceOverlays: ReferenceOverlay[] = useMemo(() => {
+    if (!sim.program) return [];
+    return sim.program.references.map((r) => {
+      const idx = sim.stockFqns.indexOf(r.fqn);
+      const color = idx >= 0
+        ? SERIES_COLORS[idx % SERIES_COLORS.length]!
+        : 'var(--ink-3)';
+      return { fqn: r.fqn, points: r.points, color };
+    });
+  }, [sim.program, sim.stockFqns]);
   const series: ChartSeries[] = useMemo(() => {
     if (!chartResult) return [];
     return sim.stockFqns.map((fqn, i) => ({
@@ -575,7 +589,11 @@ export function App() {
                     {chartResult && chartResult.time.length > 0 ? (
                       plotMode === 'time' ? (
                         <>
-                          <Chart time={chartResult.time} series={series} />
+                          <Chart
+                            time={chartResult.time}
+                            series={series}
+                            references={referenceOverlays}
+                          />
                           <ChartLegend series={series} onToggle={toggleSeries} />
                         </>
                       ) : (

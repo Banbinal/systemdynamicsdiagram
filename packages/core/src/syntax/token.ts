@@ -67,6 +67,12 @@ export const enum TokenKind {
   KwThen = 'KW_THEN',
   KwAlways = 'KW_ALWAYS',
   KwAt = 'KW_AT',
+  // Boundary marker — `exogenous constant X = ...` flags inputs that come
+  // from outside the modelled system (per Sterman's boundary diagram).
+  KwExogenous = 'KW_EXOGENOUS',
+  // Reference mode — `reference <Stock>: (t, v) (t, v) ...` declares the
+  // expected/observed behaviour the model should reproduce.
+  KwReference = 'KW_REFERENCE',
   // Time configuration words. Treated as keywords because they introduce
   // statements (e.g. `StartTime = 0`) and must not collide with user identifiers.
   KwStartTime = 'KW_START_TIME',
@@ -100,6 +106,8 @@ export const KEYWORDS: ReadonlyMap<string, TokenKind> = new Map([
   ['then', TokenKind.KwThen],
   ['always', TokenKind.KwAlways],
   ['at', TokenKind.KwAt],
+  ['exogenous', TokenKind.KwExogenous],
+  ['reference', TokenKind.KwReference],
 ]);
 
 export interface Token {
