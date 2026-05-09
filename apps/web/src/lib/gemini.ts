@@ -103,6 +103,12 @@ export interface ExplainLoopOpts {
 export async function explainLoop(opts: ExplainLoopOpts): Promise<string> {
   const url = `${GEMINI_ENDPOINT}?key=${encodeURIComponent(opts.apiKey)}`;
   const userMessage = buildLoopExplainMessage(opts);
+  // gemini-2.5-flash counts internal "thinking" tokens against
+  // maxOutputTokens. With dynamic thinking on (the default) and a tight
+  // output budget, the model can burn most of the budget reasoning and only
+  // emit a half-sentence of visible prose. This task — a 2-3 sentence
+  // explanation — does not need deep reasoning, so we set thinkingBudget=0
+  // and keep the budget generous for the actual response.
   const body = {
     systemInstruction: {
       parts: [{ text: LOOP_EXPLAIN_SYSTEM }],
@@ -110,8 +116,9 @@ export async function explainLoop(opts: ExplainLoopOpts): Promise<string> {
     contents: [{ role: 'user', parts: [{ text: userMessage }] }],
     generationConfig: {
       temperature: 0.5,
-      maxOutputTokens: 400,
+      maxOutputTokens: 1024,
       responseMimeType: 'text/plain',
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
   const init: RequestInit = {

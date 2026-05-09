@@ -1,8 +1,9 @@
-import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 
 import { findLoops, type CompiledProgram, type Loop } from '@sysdyn/core';
 
-import { explainLoop, getStoredApiKey, setStoredApiKey } from '../lib/gemini.ts';
+import { LoopExplainModal, type LoopExplainState } from './LoopExplainModal.tsx';
+import { SparkleIcon } from './SparkleIcon.tsx';
 
 interface LoopsProps {
   readonly program: CompiledProgram | null;
@@ -30,63 +31,18 @@ function polGlyph(p: '+' | '-' | '?'): string {
   return '?';
 }
 
-type ExplainState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'done'; text: string }
-  | { status: 'error'; message: string };
-
 export function Loops({ program, source, dominantLoopId }: LoopsProps) {
   const loops = useMemo<readonly Loop[]>(() => (program ? findLoops(program) : []), [program]);
 
   // Per-loop AI explanation state, keyed by loop id. Reset whenever the
-  // model recompiles (loop ids may shift, and the cached prose would lie).
-  const [explanations, setExplanations] = useState<Record<string, ExplainState>>({});
-  const programRef = useMemo(() => program, [program]);
-  // useMemo above is just for stable identity reference; reset state on it.
-  // (Using useEffect would also work — stick to useMemo so we don't drag a
-  // useEffect import.)
-  useMemo(() => {
+  // program identity changes (loop ids may shift, and cached prose would lie).
+  const [explanations, setExplanations] = useState<Record<string, LoopExplainState>>({});
+  useEffect(() => {
     setExplanations({});
-  }, [programRef]);
+    setOpenLoopId(null);
+  }, [program]);
 
-  const explain = useCallback(
-    async (loop: Loop) => {
-      let key = getStoredApiKey();
-      if (!key) {
-        const entered = window.prompt(
-          'Paste your Google AI (Gemini) API key.\nIt is stored in your browser only and used to call the Gemini API directly.',
-        );
-        if (!entered) return;
-        key = entered.trim();
-        if (!key) return;
-        setStoredApiKey(key);
-      }
-      setExplanations((prev) => ({ ...prev, [loop.id]: { status: 'loading' } }));
-      try {
-        const text = await explainLoop({
-          apiKey: key,
-          source,
-          loop: {
-            id: loop.id,
-            kind: loop.kind,
-            nodes: loop.nodes,
-            edgePolarities: loop.edgePolarities,
-          },
-        });
-        setExplanations((prev) => ({ ...prev, [loop.id]: { status: 'done', text } }));
-      } catch (err) {
-        setExplanations((prev) => ({
-          ...prev,
-          [loop.id]: {
-            status: 'error',
-            message: err instanceof Error ? err.message : String(err),
-          },
-        }));
-      }
-    },
-    [source],
-  );
+  const [openLoopId, setOpenLoopId] = useState<string | null>(null);
 
   if (!program) {
     return <aside className="loops loops--empty">— compile to detect loops —</aside>;
@@ -97,6 +53,7 @@ export function Loops({ program, source, dominantLoopId }: LoopsProps) {
 
   const rCount = loops.filter((l) => l.kind === 'R').length;
   const bCount = loops.filter((l) => l.kind === 'B').length;
+  const openLoop = openLoopId ? loops.find((l) => l.id === openLoopId) ?? null : null;
 
   return (
     <aside className="loops" aria-label="Feedback loops">
@@ -137,12 +94,13 @@ export function Loops({ program, source, dominantLoopId }: LoopsProps) {
                 )}
                 <button
                   type="button"
-                  className="loop__explain-btn"
-                  onClick={() => explain(loop)}
-                  disabled={ex.status === 'loading'}
-                  title="Ask Gemini to explain this loop in 2-3 sentences"
+                  className="ai-btn ai-btn--sm loop__ai-btn"
+                  onClick={() => setOpenLoopId(loop.id)}
+                  title="Explain this loop with Gemini"
+                  aria-label={`Explain loop ${loop.id} with AI`}
                 >
-                  {ex.status === 'loading' ? '…' : '💡'}
+                  <SparkleIcon size={11} />
+                  <span>AI</span>
                 </button>
               </div>
               <div className="loop__path">
@@ -175,6 +133,18 @@ export function Loops({ program, source, dominantLoopId }: LoopsProps) {
           );
         })}
       </ul>
+
+      {openLoop && (
+        <LoopExplainModal
+          loop={openLoop}
+          source={source}
+          initialState={explanations[openLoop.id] ?? { status: 'idle' }}
+          onClose={() => setOpenLoopId(null)}
+          onState={(next) =>
+            setExplanations((prev) => ({ ...prev, [openLoop.id]: next }))
+          }
+        />
+      )}
     </aside>
   );
 }

@@ -432,12 +432,8 @@ a:hover {
   height: 100% !important;
 }
 
-/* ─── AI overlay button (top-right of editor) ────────────────────────────── */
-.editor-ai-btn {
-  position: absolute;
-  top: 8px;
-  right: 14px;
-  z-index: 5;
+/* ─── AI affordance (shared button, used in editor toolbar + Loops) ──────── */
+.ai-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -450,20 +446,39 @@ a:hover {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   box-shadow: 0 1px 2px rgba(15, 76, 92, 0.06);
+  cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
     transform 120ms ease;
 }
-.editor-ai-btn:hover {
+.ai-btn:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent-2);
 }
-.editor-ai-btn:active {
+.ai-btn:active:not(:disabled) {
   transform: translateY(1px);
 }
-.editor-ai-btn:focus-visible {
+.ai-btn:focus-visible {
   outline: 2px solid var(--accent-ring);
   outline-offset: 2px;
+}
+.ai-btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.ai-btn--sm {
+  padding: 2px 7px;
+  font-size: 11px;
+  gap: 4px;
+  letter-spacing: 0.04em;
+}
+
+/* Editor variant — pins the button to the top-right of the CodeMirror host. */
+.editor-ai-btn {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+  z-index: 5;
 }
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
@@ -1126,24 +1141,8 @@ a:hover {
 .loop__arrow--unk {
   color: var(--ink-3);
 }
-.loop__explain-btn {
+.loop__ai-btn {
   margin-left: auto;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0 6px;
-  font-size: 12px;
-  line-height: 1.4;
-  cursor: pointer;
-  color: var(--ink-3);
-}
-.loop__explain-btn:hover:not(:disabled) {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-.loop__explain-btn:disabled {
-  cursor: progress;
-  opacity: 0.6;
 }
 .loop__explain {
   margin-top: 6px;
@@ -2239,6 +2238,24 @@ a:hover {
   flex-direction: column;
   gap: 18px;
   overflow-y: auto;
+}
+.modal__para {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.loop-explain__cycle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.loop-explain__path {
+  margin-top: 4px;
+}
+.loop-explain__result {
+  margin-top: 0;
 }
 .modal__error {
   background: var(--error-soft);

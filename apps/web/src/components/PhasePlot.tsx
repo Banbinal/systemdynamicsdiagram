@@ -288,13 +288,15 @@ export function PhasePlot({ time, xValues, yValues, xLabel, yLabel, color }: Pha
           }}
         >
           <div className="chart-tooltip__time">t = {fmtTick(time[hover.idx]!)}</div>
-          <div className="chart-tooltip__row">
-            <span className="chart-tooltip__label">{xLabel}</span>
-            <span className="chart-tooltip__value">{fmtTick(xValues[hover.idx]!)}</span>
-          </div>
-          <div className="chart-tooltip__row">
-            <span className="chart-tooltip__label">{yLabel}</span>
-            <span className="chart-tooltip__value">{fmtTick(yValues[hover.idx]!)}</span>
+          <div className="chart-tooltip__rows">
+            <div className="chart-tooltip__row" style={{ gridTemplateColumns: '1fr auto' }}>
+              <span className="chart-tooltip__lbl" title={xLabel}>{xLabel}</span>
+              <span className="chart-tooltip__val">{fmtTick(xValues[hover.idx]!)}</span>
+            </div>
+            <div className="chart-tooltip__row" style={{ gridTemplateColumns: '1fr auto' }}>
+              <span className="chart-tooltip__lbl" title={yLabel}>{yLabel}</span>
+              <span className="chart-tooltip__val">{fmtTick(yValues[hover.idx]!)}</span>
+            </div>
           </div>
         </div>
       )}

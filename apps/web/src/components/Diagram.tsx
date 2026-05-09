@@ -244,16 +244,22 @@ function DiagramInner({ program, result, timeIndex, onDominantLoopChange }: Diag
   }, [dominantLoopId, loops, program, edges]);
 
   // Apply highlight to edge data — separate from rate enrichment so the two
-  // can update independently without thrashing the edge tree.
+  // can update independently without thrashing the edge tree. Returning `curr`
+  // unchanged when no edge needs flipping is essential: `highlightedEdgeIds`
+  // memoises against `edges`, so any new array reference here would feed back
+  // into a fresh Set and re-trigger this effect indefinitely.
   useEffect(() => {
-    setEdges((curr) =>
-      curr.map((e) => {
+    setEdges((curr) => {
+      let changed = false;
+      const next = curr.map((e) => {
         const shouldHighlight = highlightedEdgeIds.has(e.id);
         const wasHighlighted = !!(e.data as { loopHighlight?: boolean })?.loopHighlight;
         if (shouldHighlight === wasHighlighted) return e;
+        changed = true;
         return { ...e, data: { ...e.data, loopHighlight: shouldHighlight } } as Edge;
-      }),
-    );
+      });
+      return changed ? next : curr;
+    });
   }, [highlightedEdgeIds, setEdges]);
 
   // ── Matter-edge rate enrichment ─────────────────────────────────────────

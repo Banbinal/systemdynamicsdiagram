@@ -139,9 +139,16 @@ export function programToReactFlow(
 
   type Eff = { stockFqn: string; polarity: 'positive' | 'negative' };
   const flows = new Map<string, Eff[]>();
+  // Dedupe (flow, stock, polarity) triples — subscript expansion can emit the
+  // same scalar effect multiple times, which would otherwise produce React Flow
+  // edges with colliding ids (`${flowId}-${stockId}`).
+  const seenEff = new Set<string>();
   for (const eff of program.flowEffects) {
     const fqn = stockSlotToFqn.get(eff.targetSlot);
     if (!fqn) continue;
+    const key = `${eff.flowFqn}|${fqn}|${eff.polarity}`;
+    if (seenEff.has(key)) continue;
+    seenEff.add(key);
     let arr = flows.get(eff.flowFqn);
     if (!arr) {
       arr = [];

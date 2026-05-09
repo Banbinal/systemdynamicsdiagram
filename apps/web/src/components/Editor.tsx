@@ -7,6 +7,7 @@ import { keymap, EditorView } from '@codemirror/view';
 
 import { sdLanguage } from '../lib/sdLanguage.ts';
 import { sdTheme } from '../lib/sdTheme.ts';
+import { SparkleIcon } from './SparkleIcon.tsx';
 
 interface EditorProps {
   readonly value: string;
@@ -45,7 +46,7 @@ export function Editor({ value, onChange, onAiAssist }: EditorProps) {
       {onAiAssist && (
         <button
           type="button"
-          className="editor-ai-btn"
+          className="ai-btn editor-ai-btn"
           onClick={onAiAssist}
           title="Generate a model with Gemini Flash"
           aria-label="AI assistant"
@@ -55,24 +56,5 @@ export function Editor({ value, onChange, onAiAssist }: EditorProps) {
         </button>
       )}
     </div>
-  );
-}
-
-function SparkleIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 15.8l-1.8-4.6L6 9.4l4.2-1.8z" />
-      <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z" />
-    </svg>
   );
 }
