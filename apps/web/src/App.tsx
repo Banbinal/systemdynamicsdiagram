@@ -15,7 +15,6 @@ import { Editor } from './components/Editor.tsx';
 import { Chart, type ChartSeries, type ReferenceOverlay } from './components/Chart.tsx';
 import { ChartLegend } from './components/ChartLegend.tsx';
 import { Diagnostics } from './components/Diagnostics.tsx';
-import { TerminalTable } from './components/TerminalTable.tsx';
 import { Header } from './components/Header.tsx';
 import { Diagram } from './components/Diagram.tsx';
 import { Loops } from './components/Loops.tsx';
@@ -31,6 +30,11 @@ import { PrintReport } from './components/PrintReport.tsx';
 import { Toast, type ToastKind } from './components/Toast.tsx';
 import { Docs } from './components/Docs.tsx';
 import { AiAssistModal } from './components/AiAssistModal.tsx';
+import {
+  Onboarding,
+  hasSeenOnboarding,
+  markOnboardingSeen,
+} from './components/Onboarding.tsx';
 
 const SERIES_COLORS = [
   'var(--series-1)',
@@ -43,7 +47,7 @@ const SERIES_COLORS = [
   'var(--series-8)',
 ];
 
-type Tab = 'model' | 'simulation' | 'compare' | 'data' | 'checks' | 'sensitivity' | 'calibrate';
+type Tab = 'model' | 'simulation' | 'compare' | 'checks' | 'sensitivity' | 'calibrate';
 type View = 'workbench' | 'docs';
 
 const SKILL_ZIP_HREF = `${import.meta.env.BASE_URL}system-dynamics-diagram.zip`;
@@ -70,7 +74,7 @@ interface ToastMsg {
 
 type PrintingState = 'off' | 'mounting' | 'ready';
 
-const TAB_NAMES: Tab[] = ['model', 'simulation', 'compare', 'data', 'checks', 'sensitivity', 'calibrate'];
+const TAB_NAMES: Tab[] = ['model', 'simulation', 'compare', 'checks', 'sensitivity', 'calibrate'];
 
 /** Read embed mode + initial tab from `?embed=1[&tab=simulation]` once at boot. */
 function readEmbedConfig(): { embed: boolean; initialTab: Tab | null } {
@@ -106,6 +110,62 @@ export function App() {
   const [toasts, setToasts] = useState<readonly ToastMsg[]>([]);
   const [printing, setPrinting] = useState<PrintingState>('off');
   const [aiOpen, setAiOpen] = useState(false);
+  // Show the first-run tour automatically only when (a) we're not in embed
+  // mode, (b) there's no share token in the hash (a user landing on a share
+  // link wants the model, not a tutorial), and (c) the user hasn't already
+  // dismissed it. Subsequent opens come from the header's "Tour" button.
+  const [tourOpen, setTourOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    if (embedMode) return false;
+    if (window.location.hash.includes('t=')) return false;
+    return !hasSeenOnboarding();
+  });
+  const closeTour = useCallback(() => {
+    markOnboardingSeen();
+    setTourOpen(false);
+  }, []);
+
+  // Width of the editor pane in pixels — null = use the default 2fr/3fr split.
+  // Persisted across reloads so the user's preferred ratio sticks.
+  const [editorPx, setEditorPx] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const saved = window.localStorage.getItem('sysdyn:editorPx');
+    if (!saved) return null;
+    const n = Number(saved);
+    return Number.isFinite(n) && n >= 220 ? n : null;
+  });
+  const startResize = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const main = e.currentTarget.parentElement; // the .main grid
+      const startW = main
+        ? (main.querySelector('.pane--left') as HTMLElement | null)?.offsetWidth ?? 0
+        : 0;
+      const totalW = main?.clientWidth ?? window.innerWidth;
+      const onMove = (ev: MouseEvent) => {
+        const next = Math.max(220, Math.min(totalW - 320, startW + (ev.clientX - startX)));
+        setEditorPx(next);
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+    [],
+  );
+  const resetResize = useCallback(() => setEditorPx(null), []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (editorPx == null) window.localStorage.removeItem('sysdyn:editorPx');
+    else window.localStorage.setItem('sysdyn:editorPx', String(editorPx));
+  }, [editorPx]);
 
   const pushToast = useCallback((text: string, kind: ToastKind = 'ok') => {
     setToasts((prev) => [...prev, { id: Date.now() + Math.random(), text, kind }]);
@@ -460,6 +520,7 @@ export function App() {
           onDownloadSkill={handleDownloadSkill}
           onImportXmile={handleImportXmile}
           onExportXmile={handleExportXmile}
+          onOpenTour={() => setTourOpen(true)}
         />
       )}
 
@@ -475,7 +536,14 @@ export function App() {
         </a>
       )}
 
-      <div className="main">
+      <div
+        className="main"
+        style={
+          !embedMode && editorPx != null
+            ? ({ gridTemplateColumns: `${editorPx}px 6px 1fr` } as React.CSSProperties)
+            : undefined
+        }
+      >
         {!embedMode && (
         <section className="pane pane--left">
           <div className="pane__header">Source · {active.title}.sd</div>
@@ -515,6 +583,19 @@ export function App() {
         </section>
         )}
 
+        {!embedMode && (
+          <div
+            className="pane-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize editor pane (double-click to reset)"
+            onMouseDown={startResize}
+            onDoubleClick={resetResize}
+          >
+            <div className="pane-resizer__grip" />
+          </div>
+        )}
+
         <section className="pane pane--right">
           <div className="tabs" role="tablist">
             <button
@@ -548,18 +629,6 @@ export function App() {
               Compare
               {variationCount > 1 && (
                 <span className="tab__count">{variationCount}</span>
-              )}
-            </button>
-            <button
-              className="tab"
-              role="tab"
-              aria-selected={tab === 'data'}
-              onClick={() => setTab('data')}
-              disabled={!sim.result}
-            >
-              Data
-              {sim.stockFqns.length > 0 && (
-                <span className="tab__count">{sim.stockFqns.length}</span>
               )}
             </button>
             {sim.program && sim.program.checks.length > 0 && (
@@ -726,22 +795,6 @@ export function App() {
               <Compare program={sim.program} stockFqns={sim.stockFqns} />
             )}
 
-            {tab === 'data' && (
-              <div className="card">
-                <div className="card__title">
-                  <h3 className="card__title-text">Terminal stock values</h3>
-                  <span className="card__title-sub">
-                    initial → final, with delta
-                  </span>
-                </div>
-                {sim.result && sim.result.time.length > 0 ? (
-                  <TerminalTable result={sim.result} stockFqns={sim.stockFqns} />
-                ) : (
-                  <div className="placeholder">No simulation data.</div>
-                )}
-              </div>
-            )}
-
             {tab === 'checks' && (
               <div className="card">
                 <div className="card__title">
@@ -790,6 +843,8 @@ export function App() {
           </div>
         </section>
       </div>
+
+      {tourOpen && <Onboarding onClose={closeTour} />}
 
       {aiOpen && (
         <AiAssistModal

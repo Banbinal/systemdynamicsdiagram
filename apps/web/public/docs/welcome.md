@@ -35,7 +35,7 @@ The simulator covers the canonical System Dynamics toolchain plus a few features
 ## Getting started in 30 seconds
 
 1. The model selector in the header has a dozen examples — pick **Simple Population** to start.
-2. The right pane shows four tabs: **Model** (the diagram), **Simulation** (the chart), **Compare** (when you have scenarios), and **Data** (the terminal stock values). When the model declares them, you'll also see **Checks**, **Sensitivity** and **Calibrate** tabs.
+2. The right pane shows three tabs: **Model** (the diagram), **Simulation** (the chart), and **Compare** (when you have scenarios). When the model declares them, you'll also see **Checks**, **Sensitivity** and **Calibrate** tabs.
 3. Switch to **Simulation** and drag a slider in the right-hand "Live tweak" panel — the chart redraws live.
 4. Press the play button on the time scrubber above the diagram (Model tab) — watch matter flow through the diagram.
 5. Click the **Share** button in the header. You get a URL with the entire model embedded in the JWT — anyone you send it to opens a tab with your model loaded.

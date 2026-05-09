@@ -121,10 +121,6 @@ Visible only when the model declares ≥ 1 scenario or sweep. Shows one chart pe
 
 The variation list at the top of the panel acts as a legend (toggle visibility per variation).
 
-### Data
-
-Terminal stock values: a small table of every stock with `t = start`, `t = end`, and Δ. Useful when the chart is busy and you just want the bottom-line numbers.
-
 ### Checks
 
 Visible only when the model declares ≥ 1 `check` block. Lists every check with a pass/fail/error badge.
